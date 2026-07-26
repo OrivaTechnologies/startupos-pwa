@@ -10,6 +10,9 @@ import {
 } from "date-fns";
 import type { createClient } from "@/lib/supabase/server";
 import type { TaskStatus } from "@/lib/supabase/types";
+import { MY_TASKS_LIST_ID, type TaskListSummary } from "@/lib/tasks";
+
+export { MY_TASKS_LIST_ID } from "@/lib/tasks";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -486,10 +489,6 @@ export async function getTaskMembers(supabase: SupabaseClient): Promise<TaskMemb
   }));
 }
 
-// Sentinel id for the virtual "My Tasks" list, which groups tasks that do not
-// belong to any real list (list_id null). It is not a row in task_lists.
-export const MY_TASKS_LIST_ID = "my-tasks";
-
 export interface TaskListWithTasks {
   id: string;
   name: string;
@@ -564,6 +563,22 @@ export async function getTaskListsWithTasks(
   return [myTasks, ...realLists];
 }
 
+// Lighter than getTaskListsWithTasks — just names for nav (the sidebar),
+// without joining every list's tasks.
+export async function getTaskListSummaries(
+  supabase: SupabaseClient
+): Promise<TaskListSummary[]> {
+  const { data, error } = await supabase
+    .from("task_lists")
+    .select("id, name")
+    .order("created_at");
+  if (error) throw error;
+  return [
+    { id: MY_TASKS_LIST_ID, name: "My Tasks", isVirtual: true },
+    ...data.map((list) => ({ id: list.id, name: list.name, isVirtual: false })),
+  ];
+}
+
 export interface TaskDetailData {
   id: string;
   list_id: string | null;
@@ -573,6 +588,7 @@ export interface TaskDetailData {
   status: TaskStatus;
   user_id: string;
   assignee_id: string | null;
+  created_at: string;
 }
 
 export async function getTaskById(
@@ -581,7 +597,7 @@ export async function getTaskById(
 ): Promise<TaskDetailData | null> {
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, list_id, title, description, due_at, status, user_id, assignee_id")
+    .select("id, list_id, title, description, due_at, status, user_id, assignee_id, created_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -599,6 +615,50 @@ export async function getTaskListName(
     .maybeSingle();
   if (error) throw error;
   return data?.name ?? null;
+}
+
+export interface TaskAttachmentWithUrl {
+  id: string;
+  file_name: string | null;
+  content_type: string | null;
+  signedUrl: string | null;
+}
+
+// The task-attachments bucket is private (see 0014_task_attachments.sql), so
+// every read needs a short-lived signed URL rather than a public one.
+const TASK_ATTACHMENT_SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+export async function getTaskAttachments(
+  supabase: SupabaseClient,
+  taskId: string
+): Promise<TaskAttachmentWithUrl[]> {
+  const { data: attachments, error } = await supabase
+    .from("task_attachments")
+    .select("id, file_name, content_type, storage_path")
+    .eq("task_id", taskId)
+    .order("uploaded_at");
+  // Fails soft (e.g. the 0014 migration hasn't been applied to this
+  // database yet) rather than crashing the whole task detail page over a
+  // feature that's allowed to just not have any attachments yet.
+  if (error) {
+    console.error("[getTaskAttachments] error:", error.message);
+    return [];
+  }
+  if (!attachments || attachments.length === 0) return [];
+
+  const { data: signed } = await supabase.storage
+    .from("task-attachments")
+    .createSignedUrls(
+      attachments.map((a) => a.storage_path),
+      TASK_ATTACHMENT_SIGNED_URL_TTL_SECONDS
+    );
+
+  return attachments.map((a, i) => ({
+    id: a.id,
+    file_name: a.file_name,
+    content_type: a.content_type,
+    signedUrl: signed?.[i]?.signedUrl ?? null,
+  }));
 }
 
 export async function getDefaultAccount(supabase: SupabaseClient) {

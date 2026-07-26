@@ -38,6 +38,10 @@ export function ActiveWorkspace({ active }: { active: WorkspaceId }) {
     if (id === active) return;
     document.cookie = `active_workspace=${id}; path=/; max-age=31536000; samesite=lax`;
     router.push(WORKSPACES[id].href);
+    // The (app) layout reads this cookie to render the sidebar, but Next.js
+    // reuses cached layout output across client navigations — refresh()
+    // forces it to re-render with the new cookie value.
+    router.refresh();
   }
 
   return (

@@ -10,7 +10,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
   DrawerClose,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -192,10 +192,10 @@ export function PaymentModePickerSheet({
                 placeholder="e.g. Google Pay UPI"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="flex-1"
+                className="h-11 flex-1"
               />
               <Select value={newKind} onValueChange={(v) => setNewKind(v as PaymentModeKind)}>
-                <SelectTrigger className="w-36">
+                <SelectTrigger className="w-36 data-[size=default]:h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -208,6 +208,7 @@ export function PaymentModePickerSheet({
               </Select>
               <Button
                 size="icon"
+                className="size-11"
                 onClick={handleCreate}
                 disabled={isCreating || !newName.trim()}
                 aria-label="Create payment mode"

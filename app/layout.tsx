@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { Lato } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
@@ -18,16 +19,23 @@ const lato = Lato({
   weight: ["400", "700", "900"],
 });
 
-export const metadata: Metadata = {
-  title: "The StartUp OS",
-  description: "Track every rupee that moves — expenses, income, and transfers.",
-  manifest: "/manifest.webmanifest",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "StartupOS",
-  },
-};
+// Phones only, not tablets: iPad/Android-tablet UAs omit the "Mobile" token,
+// and desktop/tablet should stay a plain browser tab, not an installable app.
+async function isMobilePhone() {
+  const ua = (await headers()).get("user-agent") ?? "";
+  return /iPhone|iPod/i.test(ua) || (/Android/i.test(ua) && /Mobile/i.test(ua));
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: "The StartUp OS",
+    description: "Track every rupee that moves — expenses, income, and transfers.",
+    manifest: "/manifest.webmanifest",
+    appleWebApp: (await isMobilePhone())
+      ? { capable: true, statusBarStyle: "black-translucent", title: "StartupOS" }
+      : { capable: false },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#12141a",

@@ -42,6 +42,7 @@ export function UserAvatarLink({
 
   const other = OTHER_MODULE[currentModule];
   const OtherIcon = other.icon;
+  const otherModule = currentModule === "ledger" ? "tasks" : "ledger";
 
   // Remember which module is currently in view so the profile page can show
   // it as the active workspace.
@@ -127,7 +128,12 @@ export function UserAvatarLink({
             role="menuitem"
             onClick={() => {
               setMenuOpen(false);
+              document.cookie = `active_workspace=${otherModule}; path=/; max-age=31536000; samesite=lax`;
               router.push(other.href);
+              // See active-workspace.tsx: the (app) layout's sidebar reads
+              // this cookie, and cached layout output needs a refresh to
+              // pick it up.
+              router.refresh();
             }}
             className={cn(
               "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"

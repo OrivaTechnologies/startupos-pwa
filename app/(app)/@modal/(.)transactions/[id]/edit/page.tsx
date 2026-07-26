@@ -8,6 +8,7 @@ import {
   getReceiptsForTransaction,
 } from "@/lib/queries";
 import { TransactionFormRoute } from "@/components/transaction-form/transaction-form-route";
+import { TransactionModalShell } from "@/components/transaction-form/transaction-modal-shell";
 
 export default async function EditTransactionModal({
   params,
@@ -29,7 +30,7 @@ export default async function EditTransactionModal({
   console.log(`[EditTransactionModal] id=${id} receipts.length=${receipts.length}`, receipts);
 
   return (
-    <div className="fixed inset-0 z-50 mx-auto flex w-full max-w-md flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
+    <TransactionModalShell>
       <TransactionFormRoute
         mode="modal"
         categories={formData.categories}
@@ -43,6 +44,6 @@ export default async function EditTransactionModal({
         currentUserId={profile?.id}
         currentUserRole={profile?.role}
       />
-    </div>
+    </TransactionModalShell>
   );
 }

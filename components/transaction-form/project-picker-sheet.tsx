@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Folder, ChevronRight, Plus } from "lucide-react";
+import { Folder, ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createProject } from "@/app/(app)/transactions/actions";
@@ -83,8 +84,17 @@ export function ProjectPickerSheet({
         </button>
       </DrawerTrigger>
       <DrawerContent>
-        <DrawerHeader>
+        <DrawerHeader className="flex-row items-center justify-between space-y-0">
           <DrawerTitle>Select project</DrawerTitle>
+          <DrawerClose asChild>
+            <button
+              type="button"
+              aria-label="Close"
+              className="flex size-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </DrawerClose>
         </DrawerHeader>
         <div className="flex max-h-[45vh] flex-col gap-1 overflow-y-auto px-4">
           <button
@@ -115,9 +125,11 @@ export function ProjectPickerSheet({
             placeholder="New project name"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            className="h-11"
           />
           <Button
             size="icon"
+            className="size-11"
             onClick={handleCreate}
             disabled={isPending || !newName.trim()}
             aria-label="Create project"

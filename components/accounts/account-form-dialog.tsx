@@ -10,7 +10,7 @@ import {
   DrawerTitle,
   DrawerFooter,
   DrawerClose,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
