@@ -49,7 +49,7 @@ export function DeleteConfirmDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirm} disabled={isPending}>
+          <AlertDialogAction variant="destructive" onClick={handleConfirm} disabled={isPending}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
             Delete
           </AlertDialogAction>

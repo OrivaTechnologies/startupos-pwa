@@ -2,8 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { requireTool } from "@/lib/access";
 import { getTaskListName, getTaskMembers, MY_TASKS_LIST_ID } from "@/lib/queries";
 import { NewTaskForm } from "@/components/tasks/new-task-form";
+import { TaskModalShell } from "@/components/tasks/task-modal-shell";
 
-export default async function NewTaskPage({
+export default async function NewTaskModal({
   searchParams,
 }: {
   searchParams: Promise<{ list?: string }>;
@@ -21,8 +22,8 @@ export default async function NewTaskPage({
       : (await getTaskListName(supabase, listId)) ?? "Tasks";
 
   return (
-    <div className="tasks-theme flex h-svh flex-col">
-      <NewTaskForm listId={listId} listName={listName} members={members} mode="page" />
-    </div>
+    <TaskModalShell>
+      <NewTaskForm listId={listId} listName={listName} members={members} mode="modal" />
+    </TaskModalShell>
   );
 }

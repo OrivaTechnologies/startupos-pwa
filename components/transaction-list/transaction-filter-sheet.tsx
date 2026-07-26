@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, startOfMonth, endOfMonth, startOfYear, subDays } from "date-fns";
-import { Filter, FolderKanban } from "lucide-react";
+import { Filter, FolderKanban, X } from "lucide-react";
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
   DrawerFooter,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -136,8 +137,17 @@ export function TransactionFilterSheet({
         </button>
       </DrawerTrigger>
       <DrawerContent>
-        <DrawerHeader>
+        <DrawerHeader className="flex-row items-center justify-between space-y-0">
           <DrawerTitle>Filter transactions</DrawerTitle>
+          <DrawerClose asChild>
+            <button
+              type="button"
+              aria-label="Close"
+              className="flex size-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </DrawerClose>
         </DrawerHeader>
         <div className="flex max-h-[55vh] flex-col gap-5 overflow-y-auto px-4">
           <div>

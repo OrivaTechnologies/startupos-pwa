@@ -16,7 +16,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-md items-center justify-around border-t border-glass-border bg-glass pb-[env(safe-area-inset-bottom)] backdrop-blur-xl dark:bg-card/50">
+    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto flex w-full max-w-md items-center justify-around border-t border-glass-border bg-glass pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden dark:bg-card/50">
       {TABS.slice(0, 2).map((tab) => (
         <NavLink key={tab.href} tab={tab} active={pathname.startsWith(tab.href)} />
       ))}

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireTool } from "@/lib/access";
 import { getTransactionFormData } from "@/lib/queries";
 import { TransactionFormRoute } from "@/components/transaction-form/transaction-form-route";
+import { TransactionModalShell } from "@/components/transaction-form/transaction-modal-shell";
 
 export default async function NewTransactionModal() {
   const supabase = await createClient();
@@ -10,7 +11,7 @@ export default async function NewTransactionModal() {
     await getTransactionFormData(supabase);
 
   return (
-    <div className="fixed inset-0 z-50 mx-auto flex w-full max-w-md flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
+    <TransactionModalShell>
       <TransactionFormRoute
         mode="modal"
         categories={categories}
@@ -19,6 +20,6 @@ export default async function NewTransactionModal() {
         existingTags={tagNames}
         defaultAccountId={defaultAccountId}
       />
-    </div>
+    </TransactionModalShell>
   );
 }

@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { requireTool } from "@/lib/access";
 import { getCurrentProfile, getTaskAttachments, getTaskById, getTaskMembers } from "@/lib/queries";
 import { TaskDetail } from "@/components/tasks/task-detail";
+import { TaskModalShell } from "@/components/tasks/task-modal-shell";
 
-export default async function TaskDetailPage({
+export default async function TaskDetailModal({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -25,7 +26,7 @@ export default async function TaskDetailPage({
   const creatorName = task.user_id ? nameById.get(task.user_id) ?? null : null;
 
   return (
-    <div className="tasks-theme flex h-svh flex-col">
+    <TaskModalShell>
       <TaskDetail
         task={task}
         members={members}
@@ -33,8 +34,8 @@ export default async function TaskDetailPage({
         initialAttachments={attachments}
         currentUserId={profile?.id}
         currentUserRole={profile?.role}
-        mode="page"
+        mode="modal"
       />
-    </div>
+    </TaskModalShell>
   );
 }

@@ -10,7 +10,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
   DrawerClose,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -188,10 +188,10 @@ export function AccountPickerSheet({
               placeholder="Account name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="flex-1"
+              className="h-11 flex-1"
             />
             <Select value={newType} onValueChange={(v) => setNewType(v as AccountType)}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-36 data-[size=default]:h-11">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -204,6 +204,7 @@ export function AccountPickerSheet({
             </Select>
             <Button
               size="icon"
+              className="size-11"
               onClick={handleCreate}
               disabled={isCreating || !newName.trim()}
               aria-label="Create account"

@@ -1,9 +1,10 @@
 import { TransactionFormSkeleton } from "@/components/transaction-form/transaction-form-skeleton";
+import { TransactionModalShell } from "@/components/transaction-form/transaction-modal-shell";
 
 export default function NewTransactionModalLoading() {
   return (
-    <div className="fixed inset-0 z-50 mx-auto flex w-full max-w-md flex-col overflow-hidden bg-background pt-[env(safe-area-inset-top)]">
+    <TransactionModalShell>
       <TransactionFormSkeleton />
-    </div>
+    </TransactionModalShell>
   );
 }

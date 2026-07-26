@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Paperclip, ChevronRight, Camera, X, FileText } from "lucide-react";
 import {
   DropdownMenu,
@@ -10,20 +10,85 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ReceiptWithUrl } from "@/lib/queries";
 
+function isImage(contentType?: string | null) {
+  return !!contentType?.startsWith("image/");
+}
+
+function AttachmentTile({
+  name,
+  previewUrl,
+  href,
+  onRemove,
+}: {
+  name: string | null;
+  previewUrl?: string | null;
+  href?: string | null;
+  onRemove?: () => void;
+}) {
+  const content = previewUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element -- signed/blob URLs, not a static asset next/image can optimize
+    <img src={previewUrl} alt={name ?? "Attachment"} className="size-full object-cover" />
+  ) : (
+    <div className="flex size-full flex-col items-center justify-center gap-1 p-1.5 text-center">
+      <FileText className="size-5 shrink-0 text-muted-foreground" />
+      <span className="line-clamp-2 text-[10px] break-all text-muted-foreground">
+        {name ?? "File"}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary">
+      {href ? (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="block size-full">
+          {content}
+        </a>
+      ) : (
+        content
+      )}
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove attachment"
+          className="absolute top-1 right-1 flex size-5 items-center justify-center rounded-full bg-black/60 text-white"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AttachmentUploader({
   value,
   onChange,
   existingReceipts = [],
   onRemoveExisting,
+  fileAccept = "image/*,application/pdf",
 }: {
   value: File[];
   onChange: (files: File[]) => void;
   existingReceipts?: ReceiptWithUrl[];
   onRemoveExisting?: (receiptId: string) => void;
+  fileAccept?: string;
 }) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const total = existingReceipts.length + value.length;
+
+  // Local preview thumbnails for not-yet-uploaded files — recomputed
+  // whenever the file list changes, and always revoked so we don't leak
+  // blob URLs.
+  const previewUrls = useMemo(
+    () => value.map((file) => URL.createObjectURL(file)),
+    [value]
+  );
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
 
   function handleSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? []);
@@ -65,52 +130,30 @@ export function AttachmentUploader({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,application/pdf"
+        accept={fileAccept}
         multiple
         className="hidden"
         onChange={handleSelect}
       />
       {total > 0 ? (
-        <div className="flex flex-col gap-2 pl-8">
+        <div className="grid grid-cols-4 gap-2 pl-8 sm:grid-cols-5">
           {existingReceipts.map((receipt) => (
-            <div
+            <AttachmentTile
               key={receipt.id}
-              className="flex items-center gap-2 rounded-md bg-secondary px-3 py-2"
-            >
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              {receipt.signedUrl ? (
-                <a
-                  href={receipt.signedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 truncate text-xs underline-offset-2 hover:underline"
-                >
-                  {receipt.file_name ?? "Attachment"}
-                </a>
-              ) : (
-                <span className="flex-1 truncate text-xs">{receipt.file_name ?? "Attachment"}</span>
-              )}
-              {onRemoveExisting ? (
-                <button type="button" onClick={() => onRemoveExisting(receipt.id)}>
-                  <X className="size-3.5 text-muted-foreground" />
-                </button>
-              ) : null}
-            </div>
+              name={receipt.file_name}
+              previewUrl={isImage(receipt.content_type) ? receipt.signedUrl : null}
+              href={receipt.signedUrl}
+              onRemove={onRemoveExisting ? () => onRemoveExisting(receipt.id) : undefined}
+            />
           ))}
           {value.map((file, index) => (
-            <div
+            <AttachmentTile
               key={`${file.name}-${index}`}
-              className="flex items-center gap-2 rounded-md bg-secondary px-3 py-2"
-            >
-              <FileText className="size-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1 truncate text-xs">{file.name}</span>
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((_, i) => i !== index))}
-              >
-                <X className="size-3.5 text-muted-foreground" />
-              </button>
-            </div>
+              name={file.name}
+              previewUrl={isImage(file.type) ? previewUrls[index] : null}
+              href={previewUrls[index]}
+              onRemove={() => onChange(value.filter((_, i) => i !== index))}
+            />
           ))}
         </div>
       ) : null}

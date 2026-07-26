@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { CategoryIcon } from "@/lib/categories";
 import type { Database } from "@/lib/supabase/types";
 
@@ -38,8 +39,17 @@ export function CategoryPickerSheet({
         </button>
       </DrawerTrigger>
       <DrawerContent>
-        <DrawerHeader>
+        <DrawerHeader className="flex-row items-center justify-between space-y-0">
           <DrawerTitle>Select category</DrawerTitle>
+          <DrawerClose asChild>
+            <button
+              type="button"
+              aria-label="Close"
+              className="flex size-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </DrawerClose>
         </DrawerHeader>
         <div className="grid max-h-[60vh] grid-cols-3 gap-3 overflow-y-auto px-4 pb-6">
           {categories.map((category) => (

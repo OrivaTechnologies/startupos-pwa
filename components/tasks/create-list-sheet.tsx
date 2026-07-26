@@ -10,7 +10,7 @@ import {
   DrawerTitle,
   DrawerClose,
   DrawerFooter,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createTaskList } from "@/app/(app)/tasks/actions";
@@ -44,7 +44,7 @@ export function CreateListSheet({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent>
+      <DrawerContent className="sm:max-w-sm">
         <DrawerHeader className="flex-row items-center justify-between space-y-0">
           <DrawerTitle>New list</DrawerTitle>
           <DrawerClose asChild>
@@ -58,7 +58,7 @@ export function CreateListSheet({
           </DrawerClose>
         </DrawerHeader>
 
-        <div className="px-4 pb-2">
+        <div className="px-4 pt-1 pb-4">
           <Input
             autoFocus
             placeholder="List name"
@@ -75,6 +75,7 @@ export function CreateListSheet({
             variant="tasks"
             onClick={handleCreate}
             disabled={isCreating || !name.trim()}
+            className="w-full"
           >
             {isCreating ? <Loader2 className="size-4 animate-spin" /> : null}
             Create list

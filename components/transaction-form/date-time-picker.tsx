@@ -24,7 +24,7 @@ import {
   DrawerTrigger,
   DrawerClose,
   DrawerFooter,
-} from "@/components/ui/drawer";
+} from "@/components/ui/responsive-sheet";
 import {
   Select,
   SelectContent,

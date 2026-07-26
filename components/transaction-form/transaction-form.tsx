@@ -197,7 +197,7 @@ export function TransactionForm({
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
       <div className="flex items-center gap-3 border-b border-glass-border bg-glass px-4 py-3 backdrop-blur-xl dark:bg-card/50">
         <button
           type="button"
@@ -222,7 +222,7 @@ export function TransactionForm({
         ) : null}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-28 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6 pt-4">
         <div className="shrink-0">
           <TypeTabs value={transactionType} onChange={setTransactionType} />
         </div>
@@ -334,15 +334,15 @@ export function TransactionForm({
         </Card>
       </div>
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md justify-end p-6">
+      <div className="flex shrink-0 items-center justify-end border-t border-glass-border bg-glass px-4 py-3 backdrop-blur-xl dark:bg-card/50">
         <button
           type="button"
           onClick={handleSubmit}
           disabled={isPending || !isFormValid || !canEditExisting}
-          aria-label="Save transaction"
-          className="pointer-events-auto flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-black/30 transition-transform active:scale-95 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-md shadow-black/20 transition-transform active:scale-95 disabled:opacity-40"
         >
-          {isPending ? <Loader2 className="size-6 animate-spin" /> : <Save className="size-6" />}
+          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          Save
         </button>
       </div>
 

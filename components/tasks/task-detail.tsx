@@ -1,97 +1,59 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, Check, CircleDot, UserPen, Trash2, Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import {
+  ChevronLeft,
+  ChevronDown,
+  Check,
+  CircleDot,
+  UserPen,
+  CalendarPlus,
+  Trash2,
+  Save,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canMutateRecord } from "@/lib/permissions";
-import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/delete-confirm-dialog";
-import { updateTask, deleteTask, setTaskStatus } from "@/app/(app)/tasks/actions";
-import { nextTaskStatus, TASK_STATUS_LABEL } from "@/lib/task-status";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  updateTask,
+  deleteTask,
+  setTaskStatus,
+  deleteTaskAttachment,
+} from "@/app/(app)/tasks/actions";
+import { TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
 import { TaskFields, UNASSIGNED } from "@/components/tasks/task-fields";
-import type { TaskDetailData, TaskMember } from "@/lib/queries";
-import type { UserRole } from "@/lib/supabase/types";
+import type { TaskDetailData, TaskMember, TaskAttachmentWithUrl } from "@/lib/queries";
+import type { TaskStatus, UserRole } from "@/lib/supabase/types";
 
-export function TaskDetail({
-  task,
-  members,
-  creatorName,
-  currentUserId,
-  currentUserRole,
+function StatusDropdown({
+  status,
+  isToggling,
+  disabled,
+  onChange,
 }: {
-  task: TaskDetailData;
-  members: TaskMember[];
-  creatorName: string | null;
-  currentUserId?: string;
-  currentUserRole?: UserRole;
+  status: TaskStatus;
+  isToggling: boolean;
+  disabled: boolean;
+  onChange: (status: TaskStatus) => void;
 }) {
-  const router = useRouter();
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description ?? "");
-  const [dueAt, setDueAt] = useState<string | null>(task.due_at);
-  const [assigneeId, setAssigneeId] = useState(task.assignee_id ?? UNASSIGNED);
-  const [status, setStatus] = useState(task.status);
-  const [isSaving, startSaving] = useTransition();
-  const [isToggling, startToggle] = useTransition();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const canMutate =
-    canMutateRecord(currentUserRole, currentUserId, task.user_id) ||
-    canMutateRecord(currentUserRole, currentUserId, task.assignee_id);
-
-  function advanceStatus() {
-    const next = nextTaskStatus(status);
-    startToggle(async () => {
-      const result = await setTaskStatus(task.id, next);
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-      setStatus(next);
-    });
-  }
-
-  function handleSave() {
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    const resolvedAssigneeId = assigneeId === UNASSIGNED ? null : assigneeId;
-    startSaving(async () => {
-      const result = await updateTask(task.id, trimmed, description, dueAt, resolvedAssigneeId);
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-      router.push("/tasks");
-      router.refresh();
-    });
-  }
-
-  async function handleDelete() {
-    const result = await deleteTask(task.id);
-    if (result?.error) return { error: result.error };
-    router.push("/tasks");
-    router.refresh();
-    return {};
-  }
-
   return (
-    <>
-      <div className="flex items-center justify-between px-4 pt-6 pb-4">
-        <div className="flex items-center gap-3">
-          <Link href="/tasks" aria-label="Back">
-            <ChevronLeft className="size-5" />
-          </Link>
-          <h1 className="text-lg font-semibold">Task</h1>
-        </div>
-
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <button
           type="button"
-          onClick={advanceStatus}
-          disabled={isToggling || !canMutate}
-          aria-label={`${TASK_STATUS_LABEL[status]} — tap to mark as ${TASK_STATUS_LABEL[nextTaskStatus(status)]}`}
+          disabled={disabled || isToggling}
+          aria-label={`Status: ${TASK_STATUS_LABEL[status]} — change`}
           className={cn(
             "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60",
             status === "done"
@@ -109,10 +71,143 @@ export function TaskDetail({
             <Check className="size-3.5" strokeWidth={status === "done" ? 3 : 2} />
           )}
           {TASK_STATUS_LABEL[status]}
+          <ChevronDown className="size-3" />
         </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup value={status} onValueChange={(value) => onChange(value as TaskStatus)}>
+          {TASK_STATUS_ORDER.map((s) => (
+            <DropdownMenuRadioItem key={s} value={s}>
+              {TASK_STATUS_LABEL[s]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function TaskDetail({
+  task,
+  members,
+  creatorName,
+  initialAttachments = [],
+  currentUserId,
+  currentUserRole,
+  mode = "page",
+}: {
+  task: TaskDetailData;
+  members: TaskMember[];
+  creatorName: string | null;
+  initialAttachments?: TaskAttachmentWithUrl[];
+  currentUserId?: string;
+  currentUserRole?: UserRole;
+  mode?: "modal" | "page";
+}) {
+  const router = useRouter();
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description ?? "");
+  const [dueAt, setDueAt] = useState<string | null>(task.due_at);
+  const [assigneeId, setAssigneeId] = useState(task.assignee_id ?? UNASSIGNED);
+  const [status, setStatus] = useState(task.status);
+  const [images, setImages] = useState<File[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState(initialAttachments);
+  const [isSaving, startSaving] = useTransition();
+  const [isToggling, startToggle] = useTransition();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const canMutate =
+    canMutateRecord(currentUserRole, currentUserId, task.user_id) ||
+    canMutateRecord(currentUserRole, currentUserId, task.assignee_id);
+
+  function close() {
+    if (mode === "modal") router.back();
+    else router.push("/tasks");
+  }
+
+  function changeStatus(next: TaskStatus) {
+    if (next === status) return;
+    startToggle(async () => {
+      const result = await setTaskStatus(task.id, next);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      setStatus(next);
+    });
+  }
+
+  function handleSave() {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const resolvedAssigneeId = assigneeId === UNASSIGNED ? null : assigneeId;
+    startSaving(async () => {
+      const result = await updateTask(
+        task.id,
+        trimmed,
+        description,
+        dueAt,
+        resolvedAssigneeId,
+        images
+      );
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      router.refresh();
+      close();
+    });
+  }
+
+  async function handleDelete() {
+    const result = await deleteTask(task.id);
+    if (result?.error) return { error: result.error };
+    router.refresh();
+    close();
+    return {};
+  }
+
+  async function handleRemoveExistingAttachment(attachmentId: string) {
+    const previous = existingAttachments;
+    setExistingAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    const result = await deleteTaskAttachment(attachmentId);
+    if (result.error) {
+      toast.error(result.error);
+      setExistingAttachments(previous);
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <div className="flex items-center gap-3 border-b border-glass-border bg-glass px-4 py-3 backdrop-blur-xl dark:bg-card/50">
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Back"
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <ChevronLeft className="size-5" />
+        </button>
+        <h1 className="flex-1 text-base font-semibold">Task</h1>
+        <StatusDropdown
+          status={status}
+          isToggling={isToggling}
+          disabled={!canMutate}
+          onChange={changeStatus}
+        />
+        {canMutate ? (
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            aria-label="Delete task"
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col px-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6 pt-4">
         <TaskFields
           title={title}
           onTitleChange={setTitle}
@@ -123,45 +218,48 @@ export function TaskDetail({
           dueAt={dueAt}
           onDueAtChange={setDueAt}
           members={members}
+          images={images}
+          onImagesChange={setImages}
+          existingAttachments={existingAttachments}
+          onRemoveExistingAttachment={canMutate ? handleRemoveExistingAttachment : undefined}
           disabled={!canMutate}
         />
 
-        {creatorName ? (
-          <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <UserPen className="size-3.5" />
-            Created by {creatorName}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {creatorName ? (
+            <div className="flex items-center gap-1.5">
+              <UserPen className="size-3.5" />
+              Created by {creatorName}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-1.5">
+            <CalendarPlus className="size-3.5" />
+            Created {format(new Date(task.created_at), "d MMM yyyy, h:mm a")}
           </div>
-        ) : null}
-
-        {canMutate ? (
-          <div className="mt-8 flex flex-col gap-2">
-            <Button
-              onClick={handleSave}
-              disabled={isSaving || !title.trim()}
-              className="w-full"
-            >
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setDeleteOpen(true)}
-              className="w-full text-destructive hover:text-destructive"
-            >
-              <Trash2 className="size-4" />
-              Delete
-            </Button>
-          </div>
-        ) : null}
-
-        <DeleteConfirmDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          title="Delete this task?"
-          description={`"${task.title}" will be permanently removed. This can't be undone.`}
-          onConfirm={handleDelete}
-        />
+        </div>
       </div>
-    </>
+
+      {canMutate ? (
+        <div className="flex shrink-0 items-center justify-end border-t border-glass-border bg-glass px-4 py-3 backdrop-blur-xl dark:bg-card/50">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving || !title.trim()}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-md shadow-black/20 transition-transform active:scale-95 disabled:opacity-40"
+          >
+            {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            Save
+          </button>
+        </div>
+      ) : null}
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this task?"
+        description={`"${task.title}" will be permanently removed. This can't be undone.`}
+        onConfirm={handleDelete}
+      />
+    </div>
   );
 }

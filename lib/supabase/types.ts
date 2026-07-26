@@ -346,6 +346,39 @@ export interface Database {
           },
         ];
       };
+      task_attachments: {
+        Row: {
+          id: string;
+          task_id: string;
+          storage_path: string;
+          file_name: string | null;
+          content_type: string | null;
+          size_bytes: number | null;
+          uploaded_by: string | null;
+          uploaded_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["task_attachments"]["Row"]> & {
+          task_id: string;
+          storage_path: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["task_attachments"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "task_attachments_task_id_fkey";
+            columns: ["task_id"];
+            isOneToOne: false;
+            referencedRelation: "tasks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_attachments_uploaded_by_fkey";
+            columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       account_balances: {
