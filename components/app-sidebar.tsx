@@ -162,31 +162,36 @@ export function AppSidebar({
           just means adding an entry — the dropdown grows with it. */}
       <div className="mt-4 flex shrink-0 flex-col gap-1 border-t border-glass-border pt-4">
         {canSwitchWorkspace ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-              >
-                <CurrentWorkspaceIcon className="size-4" />
-                <span className="flex-1 truncate">{WORKSPACES[activeWorkspace].label}</span>
-                <ChevronsUpDown className="size-3.5 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              {WORKSPACE_IDS.map((id) => {
-                const workspace = WORKSPACES[id];
-                const Icon = workspace.icon;
-                return (
-                  <DropdownMenuItem key={id} onSelect={() => switchTo(id)}>
-                    <Icon className="size-4" />
-                    {workspace.label}
-                    {id === activeWorkspace ? <Check className="ml-auto size-3.5" /> : null}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <>
+            <p className="px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Active workspace
+            </p>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+                >
+                  <CurrentWorkspaceIcon className="size-4" />
+                  <span className="flex-1 truncate">{WORKSPACES[activeWorkspace].label}</span>
+                  <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {WORKSPACE_IDS.map((id) => {
+                  const workspace = WORKSPACES[id];
+                  const Icon = workspace.icon;
+                  return (
+                    <DropdownMenuItem key={id} onSelect={() => switchTo(id)}>
+                      <Icon className="size-4" />
+                      {workspace.label}
+                      {id === activeWorkspace ? <Check className="ml-auto size-3.5" /> : null}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         ) : null}
 
         <Link

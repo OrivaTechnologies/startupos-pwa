@@ -72,12 +72,13 @@ function PaymentModeFormFields({
             placeholder="e.g. Google Pay UPI"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            className="h-11"
           />
         </div>
         <div className="flex flex-col gap-2">
           <Label>Type</Label>
           <Select value={kind} onValueChange={(v) => setKind(v as PaymentModeKind)}>
-            <SelectTrigger>
+            <SelectTrigger className="data-[size=default]:h-11">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
