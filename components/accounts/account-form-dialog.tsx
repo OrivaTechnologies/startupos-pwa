@@ -120,6 +120,7 @@ function AccountFormFields({
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={!canEdit}
+            className="h-11"
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -129,7 +130,7 @@ function AccountFormFields({
             onValueChange={(v) => setAccountType(v as AccountType)}
             disabled={!canEdit}
           >
-            <SelectTrigger>
+            <SelectTrigger className="data-[size=default]:h-11">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -159,6 +160,7 @@ function AccountFormFields({
             value={openingBalance}
             onChange={(e) => setOpeningBalance(e.target.value)}
             disabled={!canEdit}
+            className="h-11"
           />
         </div>
 
