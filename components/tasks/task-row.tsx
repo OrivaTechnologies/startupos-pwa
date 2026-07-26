@@ -125,7 +125,7 @@ export function TaskRow({
             {task.title}
           </p>
           {task.status === "in_progress" ? (
-            <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+            <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500 md:hidden">
               In progress
             </span>
           ) : null}
