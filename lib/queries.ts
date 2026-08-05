@@ -9,10 +9,9 @@ import {
   differenceInCalendarMonths,
 } from "date-fns";
 import type { createClient } from "@/lib/supabase/server";
-import type { TaskStatus } from "@/lib/supabase/types";
-import { MY_TASKS_LIST_ID, type TaskListSummary } from "@/lib/tasks";
-
-export { MY_TASKS_LIST_ID } from "@/lib/tasks";
+import type { TaskStatus, TaskType, TaskPriority, SprintStatus } from "@/lib/supabase/types";
+import type { ProjectSummary } from "@/lib/task-projects";
+import type { SprintSummary } from "@/lib/sprints";
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -476,12 +475,22 @@ export interface TaskMember {
   avatarUrl: string | null;
 }
 
+// Logs the full Postgres/PostgREST error (code, message, details, hint) to
+// the server console before re-throwing, since the client error boundary
+// only surfaces a collapsed/sanitized version of thrown Server Component
+// errors — this is the only reliable way to see the real cause from the
+// `next dev` terminal.
+function logAndThrow(context: string, error: unknown, extra?: Record<string, unknown>): never {
+  console.error(`[queries] ${context} failed`, { error, ...extra });
+  throw error;
+}
+
 export async function getTaskMembers(supabase: SupabaseClient): Promise<TaskMember[]> {
   const { data, error } = await supabase
     .from("profiles")
     .select("id, full_name, email, avatar_url")
     .order("full_name");
-  if (error) throw error;
+  if (error) logAndThrow("getTaskMembers", error);
   return data.map((p) => ({
     id: p.id,
     name: p.full_name || p.email,
@@ -489,50 +498,113 @@ export async function getTaskMembers(supabase: SupabaseClient): Promise<TaskMemb
   }));
 }
 
-export interface TaskListWithTasks {
-  id: string;
-  name: string;
-  isVirtual: boolean;
-  user_id: string | null;
-  tasks: {
-    id: string;
-    title: string;
-    description: string | null;
-    due_at: string | null;
-    status: TaskStatus;
-    user_id: string;
-    assignee_id: string | null;
-    assigneeName: string | null;
-    assigneeAvatarUrl: string | null;
-  }[];
+// The project-avatars bucket is private (see 0017_project_avatar_and_key.sql),
+// so every read needs a short-lived signed URL rather than a public one.
+const PROJECT_AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+// Every visible project (RLS already filters this to the caller's own
+// memberships, or every project for an admin — see is_task_project_member()
+// in 0016_task_projects.sql).
+export async function getVisibleTaskProjects(supabase: SupabaseClient): Promise<ProjectSummary[]> {
+  const { data, error } = await supabase
+    .from("task_projects")
+    .select("id, name, key_prefix, avatar_path")
+    .order("created_at");
+  if (error) logAndThrow("getVisibleTaskProjects", error);
+
+  const pathsNeedingUrls = data
+    .map((p) => p.avatar_path)
+    .filter((path): path is string => path !== null);
+
+  const urlByPath = new Map<string, string>();
+  if (pathsNeedingUrls.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from("project-avatars")
+      .createSignedUrls(pathsNeedingUrls, PROJECT_AVATAR_SIGNED_URL_TTL_SECONDS);
+    signed?.forEach((s, i) => {
+      if (s.signedUrl) urlByPath.set(pathsNeedingUrls[i], s.signedUrl);
+    });
+  }
+
+  return data.map((p) => ({
+    id: p.id,
+    name: p.name,
+    keyPrefix: p.key_prefix,
+    avatarUrl: p.avatar_path ? urlByPath.get(p.avatar_path) ?? null : null,
+  }));
 }
 
-export async function getTaskListsWithTasks(
-  supabase: SupabaseClient
-): Promise<TaskListWithTasks[]> {
+// Used by the project Edit dialog to decide whether Delete is safe to offer.
+export async function getProjectDeletionBlockers(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<{ sprintCount: number; taskCount: number }> {
+  const [{ count: sprintCount, error: sprintError }, { count: taskCount, error: taskError }] =
+    await Promise.all([
+      supabase.from("sprints").select("id", { count: "exact", head: true }).eq("project_id", projectId),
+      supabase.from("tasks").select("id", { count: "exact", head: true }).eq("project_id", projectId),
+    ]);
+  if (sprintError) logAndThrow("getProjectDeletionBlockers (sprints)", sprintError, { projectId });
+  if (taskError) logAndThrow("getProjectDeletionBlockers (tasks)", taskError, { projectId });
+  return { sprintCount: sprintCount ?? 0, taskCount: taskCount ?? 0 };
+}
+
+// A project's Members — the pool a task's assignee must come from.
+export async function getProjectMembers(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<TaskMember[]> {
+  const { data, error } = await supabase
+    .from("task_project_members")
+    .select("profiles(id, full_name, email, avatar_url)")
+    .eq("project_id", projectId);
+  if (error) logAndThrow("getProjectMembers", error, { projectId });
+  return (data as unknown as { profiles: { id: string; full_name: string | null; email: string; avatar_url: string | null } | null }[])
+    .map((row) => row.profiles)
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .map((p) => ({ id: p.id, name: p.full_name || p.email, avatarUrl: p.avatar_url }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export interface BacklogTask {
+  id: string;
+  number: number;
+  title: string;
+  description: string | null;
+  due_at: string | null;
+  status: TaskStatus;
+  task_type: TaskType;
+  priority: TaskPriority;
+  sprint_id: string | null;
+  user_id: string;
+  assignee_id: string | null;
+  assigneeName: string | null;
+  assigneeAvatarUrl: string | null;
+}
+
+// A project's Backlog — tasks not (yet) assigned to any sprint.
+export async function getBacklogTasks(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<BacklogTask[]> {
   const doneCutoff = new Date(
     Date.now() - DONE_TASK_VISIBILITY_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const [
-    { data: lists, error: listsError },
-    { data: tasks, error: tasksError },
-    members,
-  ] = await Promise.all([
-    supabase
-      .from("task_lists")
-      .select("id, name, user_id")
-      .order("created_at"),
+  const [{ data: tasks, error: tasksError }, members] = await Promise.all([
     supabase
       .from("tasks")
-      .select("id, list_id, title, description, due_at, status, user_id, assignee_id")
+      .select(
+        "id, number, title, description, due_at, status, task_type, priority, sprint_id, user_id, assignee_id"
+      )
+      .eq("project_id", projectId)
+      .is("sprint_id", null)
       // Hide tasks that have been done for more than DONE_TASK_VISIBILITY_DAYS.
       .or(`status.neq.done,completed_at.gte.${doneCutoff}`)
       .order("created_at"),
-    getTaskMembers(supabase),
+    getProjectMembers(supabase, projectId),
   ]);
-  if (listsError) throw listsError;
-  if (tasksError) throw tasksError;
+  if (tasksError) logAndThrow("getBacklogTasks", tasksError, { projectId });
 
   // Stable sort: done tasks sink to the bottom, todo/in_progress keep their
   // creation order.
@@ -540,52 +612,25 @@ export async function getTaskListsWithTasks(
 
   const nameById = new Map(members.map((m) => [m.id, m.name]));
   const avatarById = new Map(members.map((m) => [m.id, m.avatarUrl]));
-  const withAssignee = (t: (typeof tasks)[number]) => ({
+
+  return tasks.map((t) => ({
     ...t,
     assigneeName: t.assignee_id ? nameById.get(t.assignee_id) ?? null : null,
     assigneeAvatarUrl: t.assignee_id ? avatarById.get(t.assignee_id) ?? null : null,
-  });
-
-  const myTasks: TaskListWithTasks = {
-    id: MY_TASKS_LIST_ID,
-    name: "My Tasks",
-    isVirtual: true,
-    user_id: null,
-    tasks: tasks.filter((t) => t.list_id === null).map(withAssignee),
-  };
-
-  const realLists: TaskListWithTasks[] = lists.map((list) => ({
-    ...list,
-    isVirtual: false,
-    tasks: tasks.filter((t) => t.list_id === list.id).map(withAssignee),
   }));
-
-  return [myTasks, ...realLists];
-}
-
-// Lighter than getTaskListsWithTasks — just names for nav (the sidebar),
-// without joining every list's tasks.
-export async function getTaskListSummaries(
-  supabase: SupabaseClient
-): Promise<TaskListSummary[]> {
-  const { data, error } = await supabase
-    .from("task_lists")
-    .select("id, name")
-    .order("created_at");
-  if (error) throw error;
-  return [
-    { id: MY_TASKS_LIST_ID, name: "My Tasks", isVirtual: true },
-    ...data.map((list) => ({ id: list.id, name: list.name, isVirtual: false })),
-  ];
 }
 
 export interface TaskDetailData {
   id: string;
-  list_id: string | null;
+  number: number;
+  project_id: string;
   title: string;
   description: string | null;
   due_at: string | null;
   status: TaskStatus;
+  task_type: TaskType;
+  priority: TaskPriority;
+  sprint_id: string | null;
   user_id: string;
   assignee_id: string | null;
   created_at: string;
@@ -597,24 +642,115 @@ export async function getTaskById(
 ): Promise<TaskDetailData | null> {
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, list_id, title, description, due_at, status, user_id, assignee_id, created_at")
+    .select(
+      "id, number, project_id, title, description, due_at, status, task_type, priority, sprint_id, user_id, assignee_id, created_at"
+    )
     .eq("id", id)
     .maybeSingle();
-  if (error) throw error;
+  if (error) logAndThrow("getTaskById", error, { id });
   return data;
 }
 
-export async function getTaskListName(
+export async function getSprints(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<SprintSummary[]> {
+  const { data, error } = await supabase
+    .from("sprints")
+    .select("id, number, start_date, end_date, status")
+    .eq("project_id", projectId)
+    .order("number");
+  if (error) logAndThrow("getSprints", error, { projectId });
+  return data;
+}
+
+// Sprints a task can be assigned to at create/edit time — the active sprint
+// plus any queued-up upcoming ones in the same project. Closed sprints are
+// historical only.
+export async function getAssignableSprints(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<SprintSummary[]> {
+  const { data, error } = await supabase
+    .from("sprints")
+    .select("id, number, start_date, end_date, status")
+    .eq("project_id", projectId)
+    .in("status", ["active", "upcoming"] satisfies SprintStatus[])
+    .order("number");
+  if (error) logAndThrow("getAssignableSprints", error, { projectId });
+  return data;
+}
+
+export interface BoardTask {
+  id: string;
+  number: number;
+  title: string;
+  status: TaskStatus;
+  task_type: TaskType;
+  priority: TaskPriority;
+  due_at: string | null;
+  user_id: string;
+  assignee_id: string | null;
+  assigneeName: string | null;
+  assigneeAvatarUrl: string | null;
+}
+
+export interface ActiveSprintBoard {
+  sprint: SprintSummary | null;
+  tasks: BoardTask[];
+}
+
+// Powers the Jira-style board — the project's active sprint tasks, grouped
+// client-side into to-do/in-progress/done columns.
+export async function getActiveSprintBoardTasks(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<ActiveSprintBoard> {
+  const { data: sprint, error: sprintError } = await supabase
+    .from("sprints")
+    .select("id, number, start_date, end_date, status")
+    .eq("project_id", projectId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (sprintError) logAndThrow("getActiveSprintBoardTasks (sprint lookup)", sprintError, { projectId });
+  if (!sprint) return { sprint: null, tasks: [] };
+
+  const [{ data: tasks, error: tasksError }, members] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("id, number, title, status, task_type, priority, due_at, user_id, assignee_id")
+      .eq("sprint_id", sprint.id)
+      .order("created_at"),
+    getProjectMembers(supabase, projectId),
+  ]);
+  if (tasksError) {
+    logAndThrow("getActiveSprintBoardTasks (tasks lookup)", tasksError, { projectId, sprintId: sprint.id });
+  }
+
+  const nameById = new Map(members.map((m) => [m.id, m.name]));
+  const avatarById = new Map(members.map((m) => [m.id, m.avatarUrl]));
+
+  return {
+    sprint,
+    tasks: tasks.map((t) => ({
+      ...t,
+      assigneeName: t.assignee_id ? nameById.get(t.assignee_id) ?? null : null,
+      assigneeAvatarUrl: t.assignee_id ? avatarById.get(t.assignee_id) ?? null : null,
+    })),
+  };
+}
+
+export async function getSprintById(
   supabase: SupabaseClient,
   id: string
-): Promise<string | null> {
+): Promise<SprintSummary | null> {
   const { data, error } = await supabase
-    .from("task_lists")
-    .select("name")
+    .from("sprints")
+    .select("id, number, start_date, end_date, status")
     .eq("id", id)
     .maybeSingle();
-  if (error) throw error;
-  return data?.name ?? null;
+  if (error) logAndThrow("getSprintById", error, { id });
+  return data;
 }
 
 export interface TaskAttachmentWithUrl {

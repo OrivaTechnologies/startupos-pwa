@@ -27,26 +27,19 @@ export default async function HomePage() {
       getCashFlowSummary(supabase),
     ]);
   const monthLabel = new Date().toLocaleDateString("en-US", { month: "long" });
-  const displayName = profile?.full_name?.split(" ")[0] || profile?.email?.split("@")[0] || "there";
   const fullName = profile?.full_name || profile?.email || "Account";
   const isEmpty = recentTransactions.length === 0;
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <div className="flex items-start justify-between">
-        <div className="flex items-baseline gap-1.5">
-          <p className="text-sm text-muted-foreground">Welcome back</p>
-          <h1 className="text-xl font-semibold">{displayName}</h1>
-        </div>
-        {/* Mobile only — desktop/tablet keeps profile in the sidebar. */}
-        <div className="md:hidden">
-          <UserAvatarLink
-            name={fullName}
-            avatarUrl={profile?.avatar_url}
-            currentModule="ledger"
-            canSwitch={access.tools.length > 1}
-          />
-        </div>
+      {/* Mobile only — desktop/tablet keeps profile in the sidebar. */}
+      <div className="flex items-start justify-end md:hidden">
+        <UserAvatarLink
+          name={fullName}
+          avatarUrl={profile?.avatar_url}
+          currentModule="ledger"
+          canSwitch={access.tools.length > 1}
+        />
       </div>
 
       {/* Cash flow summary always renders, even with zero activity. */}

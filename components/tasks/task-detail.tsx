@@ -33,8 +33,9 @@ import {
 } from "@/app/(app)/tasks/actions";
 import { TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
 import { TaskFields, UNASSIGNED } from "@/components/tasks/task-fields";
+import { BACKLOG_SPRINT_ID, type SprintSummary } from "@/lib/sprints";
 import type { TaskDetailData, TaskMember, TaskAttachmentWithUrl } from "@/lib/queries";
-import type { TaskStatus, UserRole } from "@/lib/supabase/types";
+import type { TaskStatus, UserRole, TaskType, TaskPriority } from "@/lib/supabase/types";
 
 function StatusDropdown({
   status,
@@ -89,7 +90,9 @@ function StatusDropdown({
 
 export function TaskDetail({
   task,
+  keyPrefix,
   members,
+  sprints,
   creatorName,
   initialAttachments = [],
   currentUserId,
@@ -97,7 +100,9 @@ export function TaskDetail({
   mode = "page",
 }: {
   task: TaskDetailData;
+  keyPrefix: string;
   members: TaskMember[];
+  sprints: SprintSummary[];
   creatorName: string | null;
   initialAttachments?: TaskAttachmentWithUrl[];
   currentUserId?: string;
@@ -109,6 +114,9 @@ export function TaskDetail({
   const [description, setDescription] = useState(task.description ?? "");
   const [dueAt, setDueAt] = useState<string | null>(task.due_at);
   const [assigneeId, setAssigneeId] = useState(task.assignee_id ?? UNASSIGNED);
+  const [sprintId, setSprintId] = useState(task.sprint_id ?? BACKLOG_SPRINT_ID);
+  const [taskType, setTaskType] = useState<TaskType>(task.task_type);
+  const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [status, setStatus] = useState(task.status);
   const [images, setImages] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState(initialAttachments);
@@ -148,13 +156,19 @@ export function TaskDetail({
         description,
         dueAt,
         resolvedAssigneeId,
-        images
+        images,
+        sprintId,
+        taskType,
+        priority
       );
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      router.refresh();
+      // No router.refresh() here — updateTask already revalidates the
+      // /tasks layout server-side, and calling refresh() before close()
+      // raced with the intercepted-route back-navigation, occasionally
+      // rendering this modal as a full page instead of closing it.
       close();
     });
   }
@@ -162,7 +176,6 @@ export function TaskDetail({
   async function handleDelete() {
     const result = await deleteTask(task.id);
     if (result?.error) return { error: result.error };
-    router.refresh();
     close();
     return {};
   }
@@ -188,7 +201,9 @@ export function TaskDetail({
         >
           <ChevronLeft className="size-5" />
         </button>
-        <h1 className="flex-1 text-base font-semibold">Task</h1>
+        <h1 className="flex-1 text-base font-semibold">
+          Task <span className="text-muted-foreground">{keyPrefix}-{task.number}</span>
+        </h1>
         <StatusDropdown
           status={status}
           isToggling={isToggling}
@@ -217,6 +232,13 @@ export function TaskDetail({
           onAssigneeChange={setAssigneeId}
           dueAt={dueAt}
           onDueAtChange={setDueAt}
+          sprintId={sprintId}
+          onSprintChange={setSprintId}
+          sprints={sprints}
+          taskType={taskType}
+          onTaskTypeChange={setTaskType}
+          priority={priority}
+          onPriorityChange={setPriority}
           members={members}
           images={images}
           onImagesChange={setImages}

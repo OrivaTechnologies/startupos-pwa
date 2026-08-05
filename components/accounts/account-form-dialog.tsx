@@ -130,7 +130,7 @@ function AccountFormFields({
             onValueChange={(v) => setAccountType(v as AccountType)}
             disabled={!canEdit}
           >
-            <SelectTrigger className="data-[size=default]:h-11">
+            <SelectTrigger size="lg">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

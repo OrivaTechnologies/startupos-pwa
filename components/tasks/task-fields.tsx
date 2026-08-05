@@ -13,9 +13,16 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DateTimePicker } from "@/components/transaction-form/date-time-picker";
 import { AttachmentUploader } from "@/components/transaction-form/attachment-uploader";
+import { BACKLOG_SPRINT_ID, type SprintSummary } from "@/lib/sprints";
+import { TASK_TYPE_ORDER, TASK_TYPE_LABEL, TASK_PRIORITY_ORDER, TASK_PRIORITY_LABEL } from "@/lib/task-meta";
 import type { TaskMember, TaskAttachmentWithUrl } from "@/lib/queries";
+import type { TaskType, TaskPriority } from "@/lib/supabase/types";
 
 export const UNASSIGNED = "unassigned";
+
+function sprintLabel(sprint: SprintSummary) {
+  return sprint.status === "active" ? `Sprint ${sprint.number} (Active)` : `Sprint ${sprint.number}`;
+}
 
 function memberInitials(name: string) {
   return (
@@ -59,6 +66,13 @@ export function TaskFields({
   onAssigneeChange,
   dueAt,
   onDueAtChange,
+  sprintId,
+  onSprintChange,
+  sprints,
+  taskType,
+  onTaskTypeChange,
+  priority,
+  onPriorityChange,
   members,
   images,
   onImagesChange,
@@ -75,6 +89,13 @@ export function TaskFields({
   onAssigneeChange: (value: string) => void;
   dueAt: string | null;
   onDueAtChange: (value: string | null) => void;
+  sprintId: string;
+  onSprintChange: (value: string) => void;
+  sprints: SprintSummary[];
+  taskType: TaskType;
+  onTaskTypeChange: (value: TaskType) => void;
+  priority: TaskPriority;
+  onPriorityChange: (value: TaskPriority) => void;
   members: TaskMember[];
   images: File[];
   onImagesChange: (files: File[]) => void;
@@ -111,7 +132,7 @@ export function TaskFields({
         <div className="flex flex-col gap-1.5">
           <FieldLabel>Assignee</FieldLabel>
           <Select value={assigneeId} onValueChange={onAssigneeChange} disabled={disabled}>
-            <SelectTrigger className="w-full px-3.5 data-[size=default]:h-11">
+            <SelectTrigger size="lg" className="w-full px-3.5">
               <SelectValue placeholder="Assign to" />
             </SelectTrigger>
             <SelectContent>
@@ -158,6 +179,65 @@ export function TaskFields({
               Set a due date &amp; time
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-5 md:grid md:grid-cols-3 md:gap-4">
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel>Sprint</FieldLabel>
+          <Select value={sprintId} onValueChange={onSprintChange} disabled={disabled}>
+            <SelectTrigger size="lg" className="w-full px-3.5">
+              <SelectValue placeholder="Sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={BACKLOG_SPRINT_ID}>Backlog</SelectItem>
+              {sprints.map((sprint) => (
+                <SelectItem key={sprint.id} value={sprint.id}>
+                  {sprintLabel(sprint)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel>Type</FieldLabel>
+          <Select
+            value={taskType}
+            onValueChange={(value) => onTaskTypeChange(value as TaskType)}
+            disabled={disabled}
+          >
+            <SelectTrigger size="lg" className="w-full px-3.5">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_TYPE_ORDER.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {TASK_TYPE_LABEL[type]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel>Priority</FieldLabel>
+          <Select
+            value={priority}
+            onValueChange={(value) => onPriorityChange(value as TaskPriority)}
+            disabled={disabled}
+          >
+            <SelectTrigger size="lg" className="w-full px-3.5">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_PRIORITY_ORDER.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {TASK_PRIORITY_LABEL[p]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
