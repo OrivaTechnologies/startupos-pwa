@@ -6,17 +6,23 @@ import { toast } from "sonner";
 import { ChevronLeft, Save, Loader2 } from "lucide-react";
 import { createTask } from "@/app/(app)/tasks/actions";
 import { TaskFields, UNASSIGNED } from "@/components/tasks/task-fields";
+import { BACKLOG_SPRINT_ID, type SprintSummary } from "@/lib/sprints";
 import type { TaskMember } from "@/lib/queries";
+import type { TaskType, TaskPriority } from "@/lib/supabase/types";
 
 export function NewTaskForm({
-  listId,
-  listName,
+  projectId,
+  projectName,
   members,
+  sprints,
+  initialSprintId,
   mode = "page",
 }: {
-  listId: string;
-  listName: string;
+  projectId: string;
+  projectName: string;
   members: TaskMember[];
+  sprints: SprintSummary[];
+  initialSprintId?: string;
   mode?: "modal" | "page";
 }) {
   const router = useRouter();
@@ -24,6 +30,9 @@ export function NewTaskForm({
   const [description, setDescription] = useState("");
   const [dueAt, setDueAt] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState(UNASSIGNED);
+  const [sprintId, setSprintId] = useState(initialSprintId ?? BACKLOG_SPRINT_ID);
+  const [taskType, setTaskType] = useState<TaskType>("other");
+  const [priority, setPriority] = useState<TaskPriority>("medium");
   const [images, setImages] = useState<File[]>([]);
   const [isSaving, startSaving] = useTransition();
 
@@ -38,18 +47,24 @@ export function NewTaskForm({
     const resolvedAssigneeId = assigneeId === UNASSIGNED ? null : assigneeId;
     startSaving(async () => {
       const result = await createTask(
-        listId,
+        projectId,
         trimmed,
         description,
         dueAt,
         resolvedAssigneeId,
-        images
+        images,
+        sprintId,
+        taskType,
+        priority
       );
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      router.refresh();
+      // No router.refresh() here — createTask already revalidates the
+      // /tasks layout server-side, and calling refresh() before close()
+      // raced with the intercepted-route back-navigation, occasionally
+      // rendering this modal as a full page instead of closing it.
       close();
     });
   }
@@ -67,7 +82,7 @@ export function NewTaskForm({
         </button>
         <div className="flex-1">
           <h1 className="text-base font-semibold">New task</h1>
-          <p className="text-xs text-muted-foreground">{listName}</p>
+          <p className="text-xs text-muted-foreground">{projectName}</p>
         </div>
       </div>
 
@@ -82,6 +97,13 @@ export function NewTaskForm({
           onAssigneeChange={setAssigneeId}
           dueAt={dueAt}
           onDueAtChange={setDueAt}
+          sprintId={sprintId}
+          onSprintChange={setSprintId}
+          sprints={sprints}
+          taskType={taskType}
+          onTaskTypeChange={setTaskType}
+          priority={priority}
+          onPriorityChange={setPriority}
           members={members}
           images={images}
           onImagesChange={setImages}

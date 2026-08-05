@@ -9,6 +9,9 @@ export type PaymentModeKind = "upi" | "cheque" | "internet_banking" | "debit_car
 export type UserRole = "admin" | "member";
 export type ToolId = "ledger" | "tasks";
 export type TaskStatus = "todo" | "in_progress" | "done";
+export type SprintStatus = "upcoming" | "active" | "closed";
+export type TaskType = "bug" | "new_requirement" | "enhancement" | "other";
+export type TaskPriority = "low" | "medium" | "high" | "critical";
 
 export interface Database {
   public: {
@@ -284,20 +287,52 @@ export interface Database {
           },
         ];
       };
-      task_lists: {
+      task_projects: {
         Row: {
           id: string;
-          user_id: string;
           name: string;
+          key_prefix: string;
+          avatar_path: string | null;
+          next_task_number: number;
+          created_by: string | null;
           created_at: string;
         };
-        Insert: Partial<Database["public"]["Tables"]["task_lists"]["Row"]> & {
+        Insert: Partial<Database["public"]["Tables"]["task_projects"]["Row"]> & {
           name: string;
+          key_prefix: string;
         };
-        Update: Partial<Database["public"]["Tables"]["task_lists"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["task_projects"]["Row"]>;
         Relationships: [
           {
-            foreignKeyName: "task_lists_user_id_fkey";
+            foreignKeyName: "task_projects_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      task_project_members: {
+        Row: {
+          project_id: string;
+          user_id: string;
+          added_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["task_project_members"]["Row"]> & {
+          project_id: string;
+          user_id: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["task_project_members"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "task_project_members_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "task_projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "task_project_members_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
@@ -308,26 +343,31 @@ export interface Database {
       tasks: {
         Row: {
           id: string;
-          list_id: string | null;
+          project_id: string;
           user_id: string;
           assignee_id: string | null;
+          sprint_id: string | null;
           title: string;
           description: string | null;
           due_at: string | null;
           status: TaskStatus;
+          task_type: TaskType;
+          priority: TaskPriority;
+          number: number;
           completed_at: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["tasks"]["Row"]> & {
+          project_id: string;
           title: string;
         };
         Update: Partial<Database["public"]["Tables"]["tasks"]["Row"]>;
         Relationships: [
           {
-            foreignKeyName: "tasks_list_id_fkey";
-            columns: ["list_id"];
+            foreignKeyName: "tasks_project_id_fkey";
+            columns: ["project_id"];
             isOneToOne: false;
-            referencedRelation: "task_lists";
+            referencedRelation: "task_projects";
             referencedColumns: ["id"];
           },
           {
@@ -340,6 +380,47 @@ export interface Database {
           {
             foreignKeyName: "tasks_assignee_id_fkey";
             columns: ["assignee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tasks_sprint_id_fkey";
+            columns: ["sprint_id"];
+            isOneToOne: false;
+            referencedRelation: "sprints";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sprints: {
+        Row: {
+          id: string;
+          project_id: string;
+          number: number;
+          start_date: string;
+          end_date: string;
+          status: SprintStatus;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["sprints"]["Row"]> & {
+          project_id: string;
+          start_date: string;
+          end_date: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["sprints"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "sprints_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "task_projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "sprints_created_by_fkey";
+            columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];

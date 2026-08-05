@@ -21,19 +21,31 @@ import { cn } from "@/lib/utils";
 import { canMutateRecord } from "@/lib/permissions";
 import { setTaskStatus, deleteTask } from "@/app/(app)/tasks/actions";
 import { nextTaskStatus, TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
-import type { UserRole, TaskStatus } from "@/lib/supabase/types";
+import { TASK_PRIORITY_LABEL } from "@/lib/task-meta";
+import type { UserRole, TaskStatus, TaskType, TaskPriority } from "@/lib/supabase/types";
 
 export interface TaskRowData {
   id: string;
+  number: number;
   title: string;
   description: string | null;
   due_at: string | null;
   status: TaskStatus;
+  task_type: TaskType;
+  priority: TaskPriority;
+  sprint_id: string | null;
   user_id: string;
   assignee_id: string | null;
   assigneeName: string | null;
   assigneeAvatarUrl: string | null;
 }
+
+export const PRIORITY_BADGE_CLASS: Record<TaskPriority, string> = {
+  low: "bg-secondary text-secondary-foreground",
+  medium: "bg-sky-500/15 text-sky-500",
+  high: "bg-amber-500/15 text-amber-500",
+  critical: "bg-destructive/15 text-destructive",
+};
 
 function assigneeInitials(name: string) {
   return (
@@ -48,10 +60,12 @@ function assigneeInitials(name: string) {
 
 export function TaskRow({
   task,
+  keyPrefix,
   currentUserId,
   currentUserRole,
 }: {
   task: TaskRowData;
+  keyPrefix: string;
   currentUserId?: string;
   currentUserRole?: UserRole;
 }) {
@@ -114,16 +128,27 @@ export function TaskRow({
         ) : null}
       </button>
 
-      <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1">
+      <Link href={`/tasks/detail/${task.id}`} className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            {keyPrefix}-{task.number}
+          </span>
           <p
             className={cn(
-              "text-sm",
+              "min-w-0 truncate text-sm",
               task.status === "done" && "text-muted-foreground line-through md:no-underline"
             )}
           >
             {task.title}
           </p>
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+              PRIORITY_BADGE_CLASS[task.priority]
+            )}
+          >
+            {TASK_PRIORITY_LABEL[task.priority]}
+          </span>
           {task.status === "in_progress" ? (
             <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500 md:hidden">
               In progress

@@ -191,7 +191,7 @@ export function AccountPickerSheet({
               className="h-11 flex-1"
             />
             <Select value={newType} onValueChange={(v) => setNewType(v as AccountType)}>
-              <SelectTrigger className="w-36 data-[size=default]:h-11">
+              <SelectTrigger size="lg" className="w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

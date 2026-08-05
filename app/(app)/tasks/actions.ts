@@ -3,8 +3,59 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessContext, canMutate, PERMISSION_ERROR, type AccessContext } from "@/lib/access";
-import { MY_TASKS_LIST_ID } from "@/lib/queries";
-import type { TaskStatus } from "@/lib/supabase/types";
+import { BACKLOG_SPRINT_ID } from "@/lib/sprints";
+import type { TaskStatus, TaskType, TaskPriority } from "@/lib/supabase/types";
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+// A task may only be (re)assigned to the backlog or a sprint that's still
+// open for planning (active or upcoming) in the same project — closed
+// sprints are history, and a sprint from a different project isn't valid
+// here even if the caller happens to be a member of that project too.
+async function resolveSprintId(
+  supabase: SupabaseServerClient,
+  projectId: string,
+  sprintId: string | null
+): Promise<{ sprintId: string | null; error?: string }> {
+  if (!sprintId || sprintId === BACKLOG_SPRINT_ID) return { sprintId: null };
+
+  const { data: sprint, error } = await supabase
+    .from("sprints")
+    .select("status, project_id")
+    .eq("id", sprintId)
+    .maybeSingle();
+  if (error) return { sprintId: null, error: error.message };
+  if (
+    !sprint ||
+    sprint.project_id !== projectId ||
+    (sprint.status !== "active" && sprint.status !== "upcoming")
+  ) {
+    return {
+      sprintId: null,
+      error: "Tasks can only be assigned to the backlog or an open sprint in this project.",
+    };
+  }
+  return { sprintId };
+}
+
+// An assignee must be a Member of the task's project.
+async function resolveAssigneeId(
+  supabase: SupabaseServerClient,
+  projectId: string,
+  assigneeId: string | null
+): Promise<{ assigneeId: string | null; error?: string }> {
+  if (!assigneeId) return { assigneeId: null };
+
+  const { data: member, error } = await supabase
+    .from("task_project_members")
+    .select("user_id")
+    .eq("project_id", projectId)
+    .eq("user_id", assigneeId)
+    .maybeSingle();
+  if (error) return { assigneeId: null, error: error.message };
+  if (!member) return { assigneeId: null, error: "Assignee must be a member of this project." };
+  return { assigneeId };
+}
 
 type ActionResult = { error?: string; id?: string };
 
@@ -45,75 +96,16 @@ async function uploadTaskAttachments(
   }
 }
 
-export async function createTaskList(name: string): Promise<ActionResult> {
-  const trimmed = name.trim();
-  if (!trimmed) return { error: "List name is required" };
-
-  const supabase = await createClient();
-  const access = await getAccessContext(supabase);
-  if (!access) return { error: "Not signed in" };
-
-  const { data, error } = await supabase
-    .from("task_lists")
-    .insert({ name: trimmed })
-    .select("id")
-    .single();
-  if (error) return { error: error.message };
-
-  revalidatePath("/tasks");
-  return { id: data.id };
-}
-
-export async function renameTaskList(
-  listId: string,
-  name: string
-): Promise<ActionResult> {
-  const trimmed = name.trim();
-  if (!trimmed) return { error: "List name is required" };
-
-  const supabase = await createClient();
-  const access = await getAccessContext(supabase);
-  if (!access) return { error: "Not signed in" };
-
-  const { data: list, error: fetchError } = await supabase
-    .from("task_lists")
-    .select("user_id")
-    .eq("id", listId)
-    .maybeSingle();
-  if (fetchError) return { error: fetchError.message };
-  if (!list || !canMutate(access, list.user_id)) return { error: PERMISSION_ERROR };
-
-  const { error } = await supabase
-    .from("task_lists")
-    .update({ name: trimmed })
-    .eq("id", listId);
-  if (error) return { error: error.message };
-
-  revalidatePath("/tasks");
-  return { id: listId };
-}
-
-export async function deleteTaskList(listId: string): Promise<ActionResult> {
-  const supabase = await createClient();
-  const access = await getAccessContext(supabase);
-  if (!access) return { error: "Not signed in" };
-  if (access.role !== "admin") return { error: PERMISSION_ERROR };
-
-  // Tasks in this list cascade-delete via the list_id foreign key.
-  const { error } = await supabase.from("task_lists").delete().eq("id", listId);
-  if (error) return { error: error.message };
-
-  revalidatePath("/tasks");
-  return {};
-}
-
 export async function createTask(
-  listId: string,
+  projectId: string,
   title: string,
   description: string | null,
   dueAt: string | null,
   assigneeId: string | null,
-  images: File[] = []
+  images: File[] = [],
+  sprintId: string | null = null,
+  taskType: TaskType = "other",
+  priority: TaskPriority = "medium"
 ): Promise<ActionResult> {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) return { error: "Task title is required" };
@@ -122,14 +114,24 @@ export async function createTask(
   const access = await getAccessContext(supabase);
   if (!access) return { error: "Not signed in" };
 
+  const [resolvedSprint, resolvedAssignee] = await Promise.all([
+    resolveSprintId(supabase, projectId, sprintId),
+    resolveAssigneeId(supabase, projectId, assigneeId),
+  ]);
+  if (resolvedSprint.error) return { error: resolvedSprint.error };
+  if (resolvedAssignee.error) return { error: resolvedAssignee.error };
+
   const { data, error } = await supabase
     .from("tasks")
     .insert({
-      list_id: listId === MY_TASKS_LIST_ID ? null : listId,
+      project_id: projectId,
       title: trimmedTitle,
       description: description?.trim() || null,
       due_at: dueAt,
-      assignee_id: assigneeId,
+      assignee_id: resolvedAssignee.assigneeId,
+      sprint_id: resolvedSprint.sprintId,
+      task_type: taskType,
+      priority,
     })
     .select("id")
     .single();
@@ -137,7 +139,7 @@ export async function createTask(
 
   await uploadTaskAttachments(supabase, data.id, access.userId, images);
 
-  revalidatePath("/tasks");
+  revalidatePath("/tasks", "layout");
   return { id: data.id };
 }
 
@@ -147,7 +149,10 @@ export async function updateTask(
   description: string | null,
   dueAt: string | null,
   assigneeId: string | null,
-  images: File[] = []
+  images: File[] = [],
+  sprintId: string | null = null,
+  taskType: TaskType = "other",
+  priority: TaskPriority = "medium"
 ): Promise<ActionResult> {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) return { error: "Task title is required" };
@@ -158,11 +163,29 @@ export async function updateTask(
 
   const { data: task, error: fetchError } = await supabase
     .from("tasks")
-    .select("user_id, assignee_id")
+    .select("user_id, assignee_id, sprint_id, project_id")
     .eq("id", taskId)
     .maybeSingle();
   if (fetchError) return { error: fetchError.message };
   if (!task || !canMutateTask(access, task)) return { error: PERMISSION_ERROR };
+
+  // Leaving a task's sprint assignment untouched must always be allowed,
+  // even if that sprint has since closed (e.g. saving an unrelated edit on
+  // a done task that stayed on its now-closed sprint) — only a *new*
+  // assignment is restricted to the backlog or an open sprint. Same idea
+  // for the assignee: someone can be removed from a project after being
+  // assigned, and unrelated edits shouldn't be blocked by that.
+  const resolvedSprint =
+    sprintId === task.sprint_id
+      ? { sprintId: task.sprint_id }
+      : await resolveSprintId(supabase, task.project_id, sprintId);
+  if (resolvedSprint.error) return { error: resolvedSprint.error };
+
+  const resolvedAssignee =
+    assigneeId === task.assignee_id
+      ? { assigneeId: task.assignee_id }
+      : await resolveAssigneeId(supabase, task.project_id, assigneeId);
+  if (resolvedAssignee.error) return { error: resolvedAssignee.error };
 
   const { error } = await supabase
     .from("tasks")
@@ -170,14 +193,17 @@ export async function updateTask(
       title: trimmedTitle,
       description: description?.trim() || null,
       due_at: dueAt,
-      assignee_id: assigneeId,
+      assignee_id: resolvedAssignee.assigneeId,
+      sprint_id: resolvedSprint.sprintId,
+      task_type: taskType,
+      priority,
     })
     .eq("id", taskId);
   if (error) return { error: error.message };
 
   await uploadTaskAttachments(supabase, taskId, access.userId, images);
 
-  revalidatePath("/tasks");
+  revalidatePath("/tasks", "layout");
   return { id: taskId };
 }
 
@@ -209,7 +235,7 @@ export async function deleteTaskAttachment(attachmentId: string): Promise<Action
 
   await supabase.storage.from("task-attachments").remove([attachment.storage_path]);
 
-  revalidatePath("/tasks");
+  revalidatePath("/tasks", "layout");
   return {};
 }
 
@@ -229,7 +255,7 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) return { error: error.message };
 
-  revalidatePath("/tasks");
+  revalidatePath("/tasks", "layout");
   return {};
 }
 
@@ -252,6 +278,6 @@ export async function setTaskStatus(
   const { error } = await supabase.from("tasks").update({ status }).eq("id", taskId);
   if (error) return { error: error.message };
 
-  revalidatePath("/tasks");
+  revalidatePath("/tasks", "layout");
   return { id: taskId };
 }

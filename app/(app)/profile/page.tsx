@@ -8,8 +8,9 @@ import { getCurrentProfile } from "@/lib/queries";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { SignOutButton } from "@/components/sign-out-button";
-import { ActiveWorkspace, type WorkspaceId } from "@/components/active-workspace";
+import { ProfileWorkspaceSwitcher } from "@/components/profile-workspace-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
+import type { WorkspaceId } from "@/lib/tools";
 
 function initials(name: string) {
   return name
@@ -64,7 +65,7 @@ export default async function ProfilePage() {
               this stays mobile-only, where there's no sidebar. */}
           {canSwitchWorkspace ? (
             <div className="md:hidden">
-              <ActiveWorkspace active={activeWorkspace} />
+              <ProfileWorkspaceSwitcher active={activeWorkspace} />
             </div>
           ) : null}
 

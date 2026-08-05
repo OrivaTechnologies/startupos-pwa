@@ -9,23 +9,20 @@ import {
   BarChart3,
   Landmark,
   ListChecks,
+  CalendarRange,
+  Kanban,
+  Users,
   Plus,
-  Check,
-  ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BrandMark } from "@/components/brand-mark";
-import { CreateListSheet } from "@/components/tasks/create-list-sheet";
-import { ListActions } from "@/components/tasks/list-actions";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import type { WorkspaceId } from "@/components/active-workspace";
-import type { TaskListSummary } from "@/lib/tasks";
+import { ProjectFormDialog } from "@/components/tasks/project-form-dialog";
+import { SwitcherRow } from "@/components/switcher";
+import { WORKSPACE_OPTIONS, switchWorkspace } from "@/lib/workspace-options";
+import { getProjectBlockers } from "@/app/(app)/tasks/projects/actions";
+import type { WorkspaceId } from "@/lib/tools";
+import type { ProjectSummary } from "@/lib/task-projects";
 import type { UserRole } from "@/lib/supabase/types";
 
 const LEDGER_TABS = [
@@ -34,13 +31,6 @@ const LEDGER_TABS = [
   { href: "/analysis", label: "Analysis", icon: BarChart3 },
   { href: "/accounts", label: "Accounts", icon: Landmark },
 ] as const;
-
-const WORKSPACES: Record<WorkspaceId, { label: string; href: string; icon: typeof Landmark }> = {
-  ledger: { label: "Ledger", href: "/home", icon: Landmark },
-  tasks: { label: "Tasks", href: "/tasks", icon: ListChecks },
-};
-
-const WORKSPACE_IDS = Object.keys(WORKSPACES) as WorkspaceId[];
 
 function initials(name: string) {
   return name
@@ -54,14 +44,14 @@ function initials(name: string) {
 export function AppSidebar({
   activeWorkspace,
   canSwitchWorkspace,
-  taskLists,
+  taskProjects,
   currentUserRole,
   name,
   avatarUrl,
 }: {
   activeWorkspace: WorkspaceId;
   canSwitchWorkspace: boolean;
-  taskLists: TaskListSummary[];
+  taskProjects: ProjectSummary[];
   currentUserRole?: UserRole;
   name: string;
   avatarUrl?: string | null;
@@ -69,21 +59,21 @@ export function AppSidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [createListOpen, setCreateListOpen] = useState(false);
-  const currentListId = searchParams.get("list") ?? taskLists[0]?.id;
-  const CurrentWorkspaceIcon = WORKSPACES[activeWorkspace].icon;
-  // Mirrors TasksBoard's rule: only admins can delete a real list (rename
-  // isn't offered here — "My Tasks" isn't deletable at all, it's virtual).
-  const canDeleteList = currentUserRole === "admin";
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [editProjectOpen, setEditProjectOpen] = useState(false);
+  const [editBlockers, setEditBlockers] = useState<{ sprintCount: number; taskCount: number }>();
+  const currentProjectId = searchParams.get("project") ?? taskProjects[0]?.id;
+  const currentProject = taskProjects.find((p) => p.id === currentProjectId);
+  const currentWorkspaceOption = WORKSPACE_OPTIONS.find((w) => w.id === activeWorkspace)!;
 
-  function switchTo(id: WorkspaceId) {
-    if (id === activeWorkspace) return;
-    document.cookie = `active_workspace=${id}; path=/; max-age=31536000; samesite=lax`;
-    router.push(WORKSPACES[id].href);
-    // The (app) layout reads this cookie to decide what the sidebar shows,
-    // but Next.js reuses cached layout output across client navigations —
-    // refresh() forces it to re-render with the new cookie value.
-    router.refresh();
+  function switchProject(id: string) {
+    router.push(`${pathname}?project=${id}`);
+  }
+
+  async function openEditProject() {
+    if (!currentProject) return;
+    setEditBlockers(await getProjectBlockers(currentProject.id));
+    setEditProjectOpen(true);
   }
 
   return (
@@ -112,86 +102,104 @@ export function AppSidebar({
           </>
         ) : (
           <>
-            {taskLists.map((list) => (
-              <div key={list.id} className="flex items-center gap-1">
+            <SwitcherRow
+              label="Project"
+              variant="compact"
+              emptyLabel="No project"
+              current={
+                currentProject
+                  ? { id: currentProject.id, label: currentProject.name, avatarUrl: currentProject.avatarUrl }
+                  : undefined
+              }
+              options={taskProjects.map((p) => ({ id: p.id, label: p.name, avatarUrl: p.avatarUrl }))}
+              onSelect={switchProject}
+              onEdit={currentUserRole === "admin" ? openEditProject : undefined}
+              extraAction={
+                currentUserRole === "admin"
+                  ? { label: "New project", onClick: () => setCreateProjectOpen(true) }
+                  : undefined
+              }
+            />
+
+            {currentProjectId ? (
+              <>
                 <SidebarLink
-                  href={`/tasks?list=${list.id}`}
+                  href={`/tasks?project=${currentProjectId}`}
                   icon={ListChecks}
-                  active={list.id === currentListId}
-                  className="flex-1"
+                  active={pathname === "/tasks"}
                 >
-                  {list.name}
+                  Backlog
                 </SidebarLink>
-                {/* Everything but the virtual "My Tasks" list can be deleted from here. */}
-                {!list.isVirtual ? (
-                  <ListActions
-                    list={{ id: list.id, name: list.name }}
-                    canRename={false}
-                    canDelete={canDeleteList}
-                    onRenamed={() => {}}
-                    onDeleted={() => {}}
-                    triggerClassName="size-8 shrink-0"
-                  />
-                ) : null}
-              </div>
-            ))}
+                <SidebarLink
+                  href={`/tasks/board?project=${currentProjectId}`}
+                  icon={Kanban}
+                  active={pathname.startsWith("/tasks/board")}
+                >
+                  Active Sprint
+                </SidebarLink>
+                <SidebarLink
+                  href={`/sprints?project=${currentProjectId}`}
+                  icon={CalendarRange}
+                  active={pathname.startsWith("/sprints")}
+                >
+                  Sprints
+                </SidebarLink>
+                <SidebarLink
+                  href={`/tasks/members?project=${currentProjectId}`}
+                  icon={Users}
+                  active={pathname.startsWith("/tasks/members")}
+                >
+                  Members
+                </SidebarLink>
+              </>
+            ) : null}
 
-            <button
-              type="button"
-              onClick={() => setCreateListOpen(true)}
-              className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
-            >
-              <Plus className="size-4" />
-              New list
-            </button>
-
-            <CreateListSheet
-              open={createListOpen}
-              onOpenChange={setCreateListOpen}
-              onCreated={(list) => {
-                router.push(`/tasks?list=${list.id}`);
+            <ProjectFormDialog
+              mode="create"
+              open={createProjectOpen}
+              onOpenChange={setCreateProjectOpen}
+              onSaved={(project) => {
+                router.push(`/tasks?project=${project.id}`);
                 router.refresh();
               }}
             />
+
+            {currentProject ? (
+              <ProjectFormDialog
+                mode="edit"
+                project={currentProject}
+                blockers={editBlockers}
+                open={editProjectOpen}
+                onOpenChange={setEditProjectOpen}
+                onSaved={() => router.refresh()}
+                onDeleted={() => {
+                  router.push("/tasks");
+                  router.refresh();
+                }}
+              />
+            ) : null}
           </>
         )}
       </nav>
 
-      {/* Bottom-anchored: workspace switcher stacked directly above profile.
-          WORKSPACES is a record, so adding a third/fourth workspace later
-          just means adding an entry — the dropdown grows with it. */}
-      <div className="mt-4 flex shrink-0 flex-col gap-1 border-t border-glass-border pt-4">
+      {/* Bottom-anchored: workspace switcher stacked directly above profile. */}
+      <div className="mt-4 flex shrink-0 flex-col gap-3 border-t border-glass-border pt-4">
         {canSwitchWorkspace ? (
-          <>
-            <p className="px-3 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Active workspace
-            </p>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-                >
-                  <CurrentWorkspaceIcon className="size-4" />
-                  <span className="flex-1 truncate">{WORKSPACES[activeWorkspace].label}</span>
-                  <ChevronsUpDown className="size-3.5 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                {WORKSPACE_IDS.map((id) => {
-                  const workspace = WORKSPACES[id];
-                  const Icon = workspace.icon;
-                  return (
-                    <DropdownMenuItem key={id} onSelect={() => switchTo(id)}>
-                      <Icon className="size-4" />
-                      {workspace.label}
-                      {id === activeWorkspace ? <Check className="ml-auto size-3.5" /> : null}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+          <SwitcherRow
+            label="Active workspace"
+            variant="compact"
+            current={{
+              id: currentWorkspaceOption.id,
+              label: currentWorkspaceOption.label,
+              icon: currentWorkspaceOption.icon,
+            }}
+            options={WORKSPACE_OPTIONS}
+            onSelect={(id) => switchWorkspace(id as WorkspaceId, router)}
+            confirm={{
+              title: (option) => `Switch to ${option.label}?`,
+              description: () => "You'll leave what you're doing here and switch context.",
+            }}
+          />
         ) : null}
 
         <Link

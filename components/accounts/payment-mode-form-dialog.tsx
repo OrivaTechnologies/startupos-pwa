@@ -78,7 +78,7 @@ function PaymentModeFormFields({
         <div className="flex flex-col gap-2">
           <Label>Type</Label>
           <Select value={kind} onValueChange={(v) => setKind(v as PaymentModeKind)}>
-            <SelectTrigger className="data-[size=default]:h-11">
+            <SelectTrigger size="lg">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

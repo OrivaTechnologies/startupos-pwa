@@ -195,7 +195,7 @@ export function PaymentModePickerSheet({
                 className="h-11 flex-1"
               />
               <Select value={newKind} onValueChange={(v) => setNewKind(v as PaymentModeKind)}>
-                <SelectTrigger className="w-36 data-[size=default]:h-11">
+                <SelectTrigger size="lg" className="w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
