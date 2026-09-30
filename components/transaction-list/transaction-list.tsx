@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { format, isToday, isYesterday } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,24 +14,30 @@ import {
 } from "@/components/ui/select";
 import { TransactionRow } from "@/components/transaction-list/transaction-row";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { toIST } from "@/lib/datetime";
 import type { TransactionListItem } from "@/lib/queries";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
+// Groups are keyed by IST calendar day (not the browser/server's local
+// timezone) since the backend stores UTC and only IST is shown in the UI.
 function groupByDay(transactions: TransactionListItem[]) {
-  const groups = new Map<string, TransactionListItem[]>();
+  const groups = new Map<string, { date: Date; items: TransactionListItem[] }>();
   for (const t of transactions) {
-    const key = format(new Date(t.date_time), "yyyy-MM-dd");
-    groups.set(key, [...(groups.get(key) ?? []), t]);
+    const istDate = toIST(t.date_time);
+    const key = format(istDate, "yyyy-MM-dd");
+    const existing = groups.get(key);
+    if (existing) existing.items.push(t);
+    else groups.set(key, { date: istDate, items: [t] });
   }
   return Array.from(groups.entries());
 }
 
-function dayLabel(dateKey: string) {
-  const date = new Date(dateKey);
-  if (isToday(date)) return "Today";
-  if (isYesterday(date)) return "Yesterday";
+function dayLabel(date: Date, todayKey: string, yesterdayKey: string) {
+  const key = format(date, "yyyy-MM-dd");
+  if (key === todayKey) return "Today";
+  if (key === yesterdayKey) return "Yesterday";
   return format(date, "EEEE, d MMM");
 }
 
@@ -78,12 +84,17 @@ export function TransactionList({
     ? transactions.slice(currentPage * pageSize, currentPage * pageSize + pageSize)
     : transactions;
   const groups = groupByDay(visible);
+  const nowIST = toIST(new Date());
+  const todayKey = format(nowIST, "yyyy-MM-dd");
+  const yesterdayKey = format(subDays(nowIST, 1), "yyyy-MM-dd");
 
   return (
     <div className="flex flex-col">
-      {groups.map(([dateKey, items]) => (
+      {groups.map(([dateKey, { date, items }]) => (
         <div key={dateKey}>
-          <p className="px-4 pb-1 pt-4 text-xs text-muted-foreground">{dayLabel(dateKey)}</p>
+          <p className="px-4 pb-1 pt-4 text-xs text-muted-foreground">
+            {dayLabel(date, todayKey, yesterdayKey)}
+          </p>
           <div className="divide-y divide-border">
             {items.map((t) => (
               <TransactionRow key={t.id} transaction={t} />

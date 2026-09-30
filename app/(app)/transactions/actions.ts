@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getAccessContext, canMutate, PERMISSION_ERROR } from "@/lib/access";
+import { requireTool, getAccessContext, canMutate, PERMISSION_ERROR } from "@/lib/access";
 import { TransactionFormSchema } from "@/lib/validations/transaction";
+import { getTransactionsForRecords } from "@/lib/queries";
+import { formatISTDate, formatISTTime, istDayStartUtc, istDayEndUtc } from "@/lib/datetime";
 
 type ActionResult = { error?: string; id?: string };
 
@@ -246,6 +248,57 @@ export async function deleteReceipt(receiptId: string): Promise<ActionResult> {
 
   revalidatePath(`/transactions/${receipt.transaction_id}/edit`);
   return {};
+}
+
+function csvEscape(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+export async function exportTransactionsCsv(filters?: {
+  type?: "expense" | "income" | "transfer";
+  projectId?: string;
+  from?: string;
+  to?: string;
+}): Promise<{ csv?: string; filename?: string; error?: string }> {
+  const supabase = await createClient();
+  await requireTool(supabase, "ledger");
+
+  const transactions = await getTransactionsForRecords(supabase, {
+    type: filters?.type,
+    projectId: filters?.projectId,
+    from: filters?.from ? istDayStartUtc(filters.from).toISOString() : undefined,
+    to: filters?.to ? istDayEndUtc(filters.to).toISOString() : undefined,
+  });
+
+  const header = ["Date", "Time", "Note", "Amount", "Account", "Project"];
+  const rows = transactions.map((t) => {
+    const account =
+      t.transaction_type === "transfer"
+        ? `${t.accountName} -> ${t.destinationAccountName ?? "—"}`
+        : t.accountName;
+    return [
+      formatISTDate(t.date_time),
+      formatISTTime(t.date_time),
+      t.notes ?? "",
+      String(t.amount),
+      account,
+      t.projectName ?? "",
+    ];
+  });
+
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => csvEscape(cell)).join(","))
+    .join("\r\n");
+
+  const rangeSuffix = filters?.from || filters?.to
+    ? `_${filters?.from ?? "start"}_to_${filters?.to ?? "end"}`
+    : "";
+  const filename = `transactions${rangeSuffix}.csv`;
+
+  return { csv, filename };
 }
 
 export async function createProject(name: string): Promise<{ id?: string; error?: string }> {

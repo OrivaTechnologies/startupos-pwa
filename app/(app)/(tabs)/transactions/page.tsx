@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { startOfDay, endOfDay } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { requireTool } from "@/lib/access";
 import { getTransactionsForRecords, getProjects } from "@/lib/queries";
+import { istDayStartUtc, istDayEndUtc } from "@/lib/datetime";
 import { TransactionList } from "@/components/transaction-list/transaction-list";
 import { TransactionFilterSheet } from "@/components/transaction-list/transaction-filter-sheet";
+import { TransactionExportDialog } from "@/components/transaction-list/transaction-export-dialog";
 import { cn } from "@/lib/utils";
 
 const FILTERS = [
@@ -29,8 +30,8 @@ export default async function TransactionsPage({
     getTransactionsForRecords(supabase, {
       type: activeType,
       projectId: project,
-      from: from ? startOfDay(new Date(from)).toISOString() : undefined,
-      to: to ? endOfDay(new Date(to)).toISOString() : undefined,
+      from: from ? istDayStartUtc(from).toISOString() : undefined,
+      to: to ? istDayEndUtc(to).toISOString() : undefined,
     }),
     getProjects(supabase),
   ]);
@@ -43,13 +44,21 @@ export default async function TransactionsPage({
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Transactions</h1>
-        <TransactionFilterSheet
-          projects={projects}
-          activeType={activeType}
-          activeProjectId={project}
-          activeFrom={from}
-          activeTo={to}
-        />
+        <div className="flex items-center gap-2">
+          <TransactionExportDialog
+            activeType={activeType}
+            activeProjectId={project}
+            activeFrom={from}
+            activeTo={to}
+          />
+          <TransactionFilterSheet
+            projects={projects}
+            activeType={activeType}
+            activeProjectId={project}
+            activeFrom={from}
+            activeTo={to}
+          />
+        </div>
       </div>
       <div className="flex gap-2 overflow-x-auto">
         {FILTERS.map((filter) => {
