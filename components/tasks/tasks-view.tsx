@@ -9,6 +9,7 @@ import { UserAvatarLink } from "@/components/user-avatar-link";
 import { TaskRow } from "@/components/tasks/task-row";
 import { TaskFilters, ALL_FILTER } from "@/components/tasks/task-filters";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/lib/use-media-query";
 
 const PAGE_SIZE = 20;
@@ -93,17 +94,18 @@ export function TasksView({
     <div className="flex flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 px-4 pt-2 pb-3 md:pt-4 md:pb-4">
         <h1 className="min-w-0 flex-1 text-lg font-semibold leading-none">
-          {TABS.find((t) => t.id === tab)?.label ?? "Tasks"}
+          <span className="md:hidden">Tasks</span>
+          <span className="hidden md:inline">{TABS.find((t) => t.id === tab)?.label ?? "Tasks"}</span>
         </h1>
 
         <div className="flex shrink-0 items-center gap-2">
           {tab !== "archived" ? (
             <Link
               href="/tasks/new"
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95"
+              className="hidden items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95 md:flex"
             >
               <Plus className="size-4 shrink-0" />
-              <span className="hidden sm:inline">Add task</span>
+              Add task
             </Link>
           ) : null}
           {profileName ? (
@@ -118,6 +120,30 @@ export function TasksView({
           ) : null}
         </div>
       </div>
+
+      <nav
+        aria-label="Task lists"
+        className="mx-4 mb-3 grid grid-cols-3 gap-1 rounded-xl bg-secondary/40 p-1 md:hidden"
+      >
+        {TABS.map((item) => {
+          const active = item.id === tab;
+          return (
+            <Link
+              key={item.id}
+              href={item.id === "all" ? "/tasks" : `/tasks?tab=${item.id}`}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "truncate rounded-lg px-2 py-2 text-center text-sm font-medium transition-colors",
+                active
+                  ? "bg-background text-foreground shadow-sm dark:bg-card"
+                  : "text-muted-foreground"
+              )}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
 
       {tab !== "archived" ? (
         <TaskFilters
@@ -193,6 +219,19 @@ export function TasksView({
         ) : null}
       </div>
 
+      {tab !== "archived" ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 md:hidden">
+          <div className="mx-auto flex w-full max-w-md justify-end px-4">
+            <Link
+              href="/tasks/new"
+              aria-label="Add task"
+              className="pointer-events-auto flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95"
+            >
+              <Plus className="size-6" />
+            </Link>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

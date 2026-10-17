@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Check, Calendar, Loader2, MoreVertical, Trash2, Archive, ArchiveRestore } from "lucide-react";
+import { Calendar, MoreVertical, Trash2, Archive, ArchiveRestore } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -20,7 +20,7 @@ import { DeleteConfirmDialog } from "@/components/delete-confirm-dialog";
 import { cn } from "@/lib/utils";
 import { canMutateRecord } from "@/lib/permissions";
 import { setTaskStatus, deleteTask, setTaskArchived } from "@/app/(app)/tasks/actions";
-import { nextTaskStatus, TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
+import { TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
 import { toIST } from "@/lib/datetime";
 import type { UserRole, TaskStatus } from "@/lib/supabase/types";
 import type { TaskListItem } from "@/lib/queries";
@@ -33,6 +33,44 @@ function assigneeInitials(name: string) {
       .slice(0, 2)
       .map((part) => part[0]!.toUpperCase())
       .join("") || "?"
+  );
+}
+
+function TaskMeta({ task }: { task: TaskListItem }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span
+        className={cn(
+          "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+          task.status === "done"
+            ? "bg-primary/15 text-primary"
+            : task.status === "in_progress"
+              ? "bg-amber-500/15 text-amber-500"
+              : "bg-secondary text-secondary-foreground"
+        )}
+      >
+        {TASK_STATUS_LABEL[task.status]}
+      </span>
+      {task.due_at ? (
+        <span className="flex items-center gap-1">
+          <Calendar className="size-3.5" />
+          {format(toIST(task.due_at), "d MMM yyyy")}
+        </span>
+      ) : null}
+      {task.assigneeName ? (
+        <span className="flex items-center gap-1.5">
+          <Avatar className="size-5">
+            {task.assigneeAvatarUrl ? (
+              <AvatarImage src={task.assigneeAvatarUrl} alt={task.assigneeName} />
+            ) : null}
+            <AvatarFallback className="bg-secondary text-[9px] text-secondary-foreground">
+              {assigneeInitials(task.assigneeName)}
+            </AvatarFallback>
+          </Avatar>
+          {task.assigneeName}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -53,14 +91,6 @@ export function TaskRow({
   const canMutate =
     canMutateRecord(currentUserRole, currentUserId, task.user_id) ||
     canMutateRecord(currentUserRole, currentUserId, task.assignee_id);
-
-  function advanceStatus() {
-    if (archivedView) return;
-    startTransition(async () => {
-      const result = await setTaskStatus(task.id, nextTaskStatus(task.status));
-      if (result.error) toast.error(result.error);
-    });
-  }
 
   function changeStatus(status: TaskStatus) {
     if (status === task.status || archivedView) return;
@@ -83,130 +113,81 @@ export function TaskRow({
     return {};
   }
 
+  const titleClass = cn(
+    "min-w-0 text-sm leading-5",
+    task.status === "done" && !archivedView && "text-muted-foreground line-through md:no-underline"
+  );
+
   return (
-    <div className="flex items-start gap-3.5 rounded-2xl border border-glass-border bg-glass px-5 py-4.5 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150 dark:bg-card/50">
-      {!archivedView ? (
-        <button
-          type="button"
-          onClick={advanceStatus}
-          disabled={isPending || !canMutate}
-          aria-label={`${TASK_STATUS_LABEL[task.status]} — tap to mark as ${TASK_STATUS_LABEL[nextTaskStatus(task.status)]}`}
+    <div className="relative rounded-2xl border border-glass-border bg-glass px-5 py-4.5 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150 md:flex md:items-start md:gap-3.5 dark:bg-card/50">
+      <Link href={`/tasks/detail/${task.id}`} className="block md:hidden">
+        <span
           className={cn(
-            "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors disabled:opacity-50 md:hidden",
-            task.status === "done"
-              ? "border-primary bg-primary"
-              : task.status === "in_progress"
-                ? "border-amber-500 bg-amber-500/20"
-                : "border-muted-foreground"
+            "flex h-8 items-center text-xs font-medium text-muted-foreground",
+            canMutate && "pr-8"
           )}
         >
-          {isPending ? (
-            <Loader2
-              className={cn(
-                "size-3 animate-spin",
-                task.status === "done" ? "text-primary-foreground" : "text-muted-foreground"
-              )}
-            />
-          ) : task.status === "done" ? (
-            <Check className="size-3 text-primary-foreground" strokeWidth={3} />
-          ) : task.status === "in_progress" ? (
-            <span className="size-2 rounded-full bg-amber-500" />
-          ) : null}
-        </button>
-      ) : null}
+          TASK-{task.number}
+        </span>
+        <p className={cn(titleClass, "mt-1 line-clamp-2")}>{task.title}</p>
+        <TaskMeta task={task} />
+      </Link>
 
-      <Link href={`/tasks/detail/${task.id}`} className="min-w-0 flex-1">
+      <Link href={`/tasks/detail/${task.id}`} className="hidden min-w-0 flex-1 md:block">
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-xs font-medium text-muted-foreground">TASK-{task.number}</span>
-          <p
-            className={cn(
-              "min-w-0 truncate text-sm",
-              task.status === "done" && !archivedView && "text-muted-foreground line-through md:no-underline"
-            )}
-          >
-            {task.title}
-          </p>
+          <p className={cn(titleClass, "truncate")}>{task.title}</p>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
-              task.status === "done"
-                ? "bg-primary/15 text-primary"
-                : task.status === "in_progress"
-                  ? "bg-amber-500/15 text-amber-500"
-                  : "bg-secondary text-secondary-foreground"
-            )}
-          >
-            {TASK_STATUS_LABEL[task.status]}
-          </span>
-          {task.due_at ? (
-            <span className="flex items-center gap-1">
-              <Calendar className="size-3.5" />
-              {format(toIST(task.due_at), "d MMM yyyy")}
-            </span>
-          ) : null}
-          {task.assigneeName ? (
-            <span className="flex items-center gap-1.5">
-              <Avatar className="size-5">
-                {task.assigneeAvatarUrl ? (
-                  <AvatarImage src={task.assigneeAvatarUrl} alt={task.assigneeName} />
-                ) : null}
-                <AvatarFallback className="bg-secondary text-[9px] text-secondary-foreground">
-                  {assigneeInitials(task.assigneeName)}
-                </AvatarFallback>
-              </Avatar>
-              {task.assigneeName}
-            </span>
-          ) : null}
-        </div>
+        <TaskMeta task={task} />
       </Link>
 
       {canMutate ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Task options"
-              disabled={isPending}
-              className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
-            >
-              <MoreVertical className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {!archivedView ? (
-              <>
-                <DropdownMenuLabel>Change status</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={task.status}
-                  onValueChange={(value) => changeStatus(value as TaskStatus)}
-                >
-                  {TASK_STATUS_ORDER.map((status) => (
-                    <DropdownMenuRadioItem key={status} value={status}>
-                      {TASK_STATUS_LABEL[status]}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-                <DropdownMenuSeparator />
+        <div className="absolute top-4.5 right-5 z-10 md:static">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Task options"
+                disabled={isPending}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+              >
+                <MoreVertical className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {!archivedView ? (
+                <>
+                  <DropdownMenuLabel>Change status</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={task.status}
+                    onValueChange={(value) => changeStatus(value as TaskStatus)}
+                  >
+                    {TASK_STATUS_ORDER.map((status) => (
+                      <DropdownMenuRadioItem key={status} value={status}>
+                        {TASK_STATUS_LABEL[status]}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={toggleArchive}>
+                    <Archive className="size-4" />
+                    Archive
+                  </DropdownMenuItem>
+                </>
+              ) : (
                 <DropdownMenuItem onSelect={toggleArchive}>
-                  <Archive className="size-4" />
-                  Archive
+                  <ArchiveRestore className="size-4" />
+                  Unarchive
                 </DropdownMenuItem>
-              </>
-            ) : (
-              <DropdownMenuItem onSelect={toggleArchive}>
-                <ArchiveRestore className="size-4" />
-                Unarchive
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+                <Trash2 className="size-4" />
+                Delete
               </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
-              <Trash2 className="size-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       ) : null}
 
       <DeleteConfirmDialog
