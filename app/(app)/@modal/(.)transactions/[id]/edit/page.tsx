@@ -17,8 +17,8 @@ export default async function EditTransactionModal({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const [formData, existing, profile, receipts] = await Promise.all([
+  const [, formData, existing, profile, receipts] = await Promise.all([
+    requireTool(supabase, "ledger"),
     getTransactionFormData(supabase),
     getTransactionWithTags(supabase, id),
     getCurrentProfile(supabase),
@@ -26,8 +26,6 @@ export default async function EditTransactionModal({
   ]);
 
   if (!existing) notFound();
-
-  console.log(`[EditTransactionModal] id=${id} receipts.length=${receipts.length}`, receipts);
 
   return (
     <TransactionModalShell>

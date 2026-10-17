@@ -8,8 +8,10 @@ import { MonthlyBarChart } from "@/components/analysis/monthly-bar-chart";
 
 export default async function AnalysisPage() {
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const { monthly, byPeriod, totalBalance, hasActivity } = await getAnalysisData(supabase);
+  const [, { monthly, byPeriod, totalBalance, hasActivity }] = await Promise.all([
+    requireTool(supabase, "ledger"),
+    getAnalysisData(supabase),
+  ]);
 
   return (
     <div className="flex flex-col gap-6 p-4">

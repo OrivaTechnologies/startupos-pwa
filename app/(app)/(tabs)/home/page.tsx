@@ -19,9 +19,9 @@ const BREAKDOWN_COLORS = [
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const access = await requireTool(supabase, "ledger");
-  const [{ spent, categoryBreakdown, recentTransactions }, profile, cashFlow] =
+  const [access, { spent, categoryBreakdown, recentTransactions }, profile, cashFlow] =
     await Promise.all([
+      requireTool(supabase, "ledger"),
       getHomeDashboardData(supabase),
       getCurrentProfile(supabase),
       getCashFlowSummary(supabase),

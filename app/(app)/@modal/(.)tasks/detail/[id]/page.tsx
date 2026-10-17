@@ -12,15 +12,14 @@ export default async function TaskDetailModal({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  await requireTool(supabase, "tasks");
-  const task = await getTaskById(supabase, id);
-  if (!task) notFound();
-
-  const [members, profile, attachments] = await Promise.all([
+  const [, task, members, profile, attachments] = await Promise.all([
+    requireTool(supabase, "tasks"),
+    getTaskById(supabase, id),
     getTaskMembers(supabase),
     getCurrentProfile(supabase),
     getTaskAttachments(supabase, id),
   ]);
+  if (!task) notFound();
 
   const nameById = new Map(members.map((m) => [m.id, m.name]));
   const creatorName = task.user_id ? nameById.get(task.user_id) ?? null : null;

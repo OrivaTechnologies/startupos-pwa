@@ -5,8 +5,10 @@ import { NewTaskForm } from "@/components/tasks/new-task-form";
 
 export default async function NewTaskPage() {
   const supabase = await createClient();
-  await requireTool(supabase, "tasks");
-  const members = await getTaskMembers(supabase);
+  const [, members] = await Promise.all([
+    requireTool(supabase, "tasks"),
+    getTaskMembers(supabase),
+  ]);
 
   return (
     <div className="tasks-theme flex h-svh flex-col">

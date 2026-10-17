@@ -1,19 +1,13 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requireTool } from "@/lib/access";
 import { getTransactionsForRecords, getProjects } from "@/lib/queries";
 import { istDayStartUtc, istDayEndUtc } from "@/lib/datetime";
 import { TransactionList } from "@/components/transaction-list/transaction-list";
+import { TransactionTypeTabs } from "@/components/transaction-list/transaction-type-tabs";
+import { TransactionRowsSkeleton } from "@/components/transaction-list/transaction-rows-skeleton";
 import { TransactionFilterSheet } from "@/components/transaction-list/transaction-filter-sheet";
 import { TransactionExportDialog } from "@/components/transaction-list/transaction-export-dialog";
-import { cn } from "@/lib/utils";
-
-const FILTERS = [
-  { value: undefined, label: "All" },
-  { value: "expense", label: "Expense" },
-  { value: "income", label: "Income" },
-  { value: "transfer", label: "Transfer" },
-] as const;
 
 export default async function TransactionsPage({
   searchParams,
@@ -25,8 +19,8 @@ export default async function TransactionsPage({
     type === "expense" || type === "income" || type === "transfer" ? type : undefined;
 
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const [transactions, projects] = await Promise.all([
+  const [, transactions, projects] = await Promise.all([
+    requireTool(supabase, "ledger"),
     getTransactionsForRecords(supabase, {
       type: activeType,
       projectId: project,
@@ -60,35 +54,22 @@ export default async function TransactionsPage({
           />
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto">
-        {FILTERS.map((filter) => {
-          const params = new URLSearchParams();
-          if (filter.value) params.set("type", filter.value);
-          if (project) params.set("project", project);
-          if (from) params.set("from", from);
-          if (to) params.set("to", to);
-          const query = params.toString();
-          return (
-          <Link
-            key={filter.label}
-            href={query ? `/transactions?${query}` : "/transactions"}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium",
-              activeType === filter.value
-                ? "border-primary bg-primary/15 text-primary"
-                : "border-border text-muted-foreground"
-            )}
-          >
-            {filter.label}
-          </Link>
-          );
-        })}
-      </div>
-      <TransactionList
-        transactions={transactions}
-        emptyTitle={emptyTitle}
-        emptyDescription={emptyDescription}
-      />
+      <Suspense fallback={<div className="h-8" />}>
+        <TransactionTypeTabs />
+      </Suspense>
+      <Suspense fallback={<TransactionRowsSkeleton />}>
+        <TransactionList
+          transactions={transactions}
+          applied={{
+            type: activeType ?? "",
+            project: project ?? "",
+            from: from ?? "",
+            to: to ?? "",
+          }}
+          emptyTitle={emptyTitle}
+          emptyDescription={emptyDescription}
+        />
+      </Suspense>
     </div>
   );
 }

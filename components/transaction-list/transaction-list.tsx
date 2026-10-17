@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { format, subDays } from "date-fns";
 import { ArrowLeftRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TransactionRow } from "@/components/transaction-list/transaction-row";
+import { TransactionRowsSkeleton } from "@/components/transaction-list/transaction-rows-skeleton";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { toIST } from "@/lib/datetime";
 import type { TransactionListItem } from "@/lib/queries";
@@ -43,13 +45,24 @@ function dayLabel(date: Date, todayKey: string, yesterdayKey: string) {
 
 export function TransactionList({
   transactions,
+  applied,
   emptyTitle = "No transactions yet",
   emptyDescription = "Start by adding your first expense, income, or transfer.",
 }: {
   transactions: TransactionListItem[];
+  applied: { type: string; project: string; from: string; to: string };
   emptyTitle?: string;
   emptyDescription?: string;
 }) {
+  const searchParams = useSearchParams();
+  const urlType = searchParams.get("type");
+  const normalizedType =
+    urlType === "expense" || urlType === "income" || urlType === "transfer" ? urlType : "";
+  const listPending =
+    normalizedType !== applied.type ||
+    (searchParams.get("project") ?? "") !== applied.project ||
+    (searchParams.get("from") ?? "") !== applied.from ||
+    (searchParams.get("to") ?? "") !== applied.to;
   // Desktop has room for pagination controls and enough transactions on
   // screen that "just keep scrolling" stops being the friendlier option;
   // mobile keeps the single continuous list.
@@ -63,6 +76,8 @@ export function TransactionList({
     setRenderedTransactions(transactions);
     setPage(0);
   }
+
+  if (listPending) return <TransactionRowsSkeleton />;
 
   if (transactions.length === 0) {
     return (
