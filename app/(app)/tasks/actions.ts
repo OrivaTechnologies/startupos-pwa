@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getAccessContext, canMutate, PERMISSION_ERROR, type AccessContext } from "@/lib/access";
+import { dueAtEndOfIstDay } from "@/lib/datetime";
 import type { TaskStatus } from "@/lib/supabase/types";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -35,7 +36,11 @@ function parseTaskFields(formData: FormData): {
     typeof descriptionRaw === "string" && descriptionRaw.trim() ? descriptionRaw.trim() : null;
 
   const dueRaw = formData.get("due_at");
-  const dueAt = typeof dueRaw === "string" && dueRaw ? dueRaw : null;
+  const dueAt =
+    typeof dueRaw === "string" && dueRaw ? dueAtEndOfIstDay(dueRaw) : null;
+  if (typeof dueRaw === "string" && dueRaw && !dueAt) {
+    return { title: "", description: null, dueAt: null, assigneeId: null, error: "Pick a valid due date." };
+  }
 
   const assigneeRaw = formData.get("assignee_id");
   const assigneeId =

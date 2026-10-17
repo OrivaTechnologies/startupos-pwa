@@ -1,6 +1,6 @@
 "use client";
 
-import { X, CalendarClock, UserRound } from "lucide-react";
+import { X, Calendar, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DateTimePicker } from "@/components/transaction-form/date-time-picker";
+import { dueAtEndOfIstDay, istDateKey, istDayEndUtc } from "@/lib/datetime";
 import { AttachmentUploader } from "@/components/transaction-form/attachment-uploader";
 import type { TaskMember, TaskAttachmentWithUrl } from "@/lib/queries";
 
@@ -136,7 +137,11 @@ export function TaskFields({
           <FieldLabel>Due date</FieldLabel>
           {dueAt ? (
             <div className="flex h-11 items-center justify-between rounded-lg border border-input px-3">
-              <DateTimePicker value={dueAt} onChange={onDueAtChange} />
+              <DateTimePicker
+                dateOnly
+                value={dueAtEndOfIstDay(dueAt) ?? dueAt}
+                onChange={onDueAtChange}
+              />
               <button
                 type="button"
                 aria-label="Remove due date"
@@ -151,11 +156,11 @@ export function TaskFields({
             <button
               type="button"
               disabled={disabled}
-              onClick={() => onDueAtChange(new Date().toISOString())}
+              onClick={() => onDueAtChange(istDayEndUtc(istDateKey(new Date())).toISOString())}
               className="flex h-11 items-center gap-2 rounded-lg border border-dashed border-input px-3 text-sm text-muted-foreground transition-colors hover:border-solid hover:text-foreground disabled:opacity-50"
             >
-              <CalendarClock className="size-4" />
-              Set a due date &amp; time
+              <Calendar className="size-4" />
+              Set a due date
             </button>
           )}
         </div>

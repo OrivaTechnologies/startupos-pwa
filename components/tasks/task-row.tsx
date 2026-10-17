@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Check, CalendarClock, Loader2, MoreVertical, Trash2, Archive, ArchiveRestore } from "lucide-react";
+import { Check, Calendar, Loader2, MoreVertical, Trash2, Archive, ArchiveRestore } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { canMutateRecord } from "@/lib/permissions";
 import { setTaskStatus, deleteTask, setTaskArchived } from "@/app/(app)/tasks/actions";
 import { nextTaskStatus, TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
+import { toIST } from "@/lib/datetime";
 import type { UserRole, TaskStatus } from "@/lib/supabase/types";
 import type { TaskListItem } from "@/lib/queries";
 
@@ -125,17 +126,24 @@ export function TaskRow({
           >
             {task.title}
           </p>
-          {task.status === "in_progress" && !archivedView ? (
-            <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500 md:hidden">
-              In progress
-            </span>
-          ) : null}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+              task.status === "done"
+                ? "bg-primary/15 text-primary"
+                : task.status === "in_progress"
+                  ? "bg-amber-500/15 text-amber-500"
+                  : "bg-secondary text-secondary-foreground"
+            )}
+          >
+            {TASK_STATUS_LABEL[task.status]}
+          </span>
           {task.due_at ? (
             <span className="flex items-center gap-1">
-              <CalendarClock className="size-3.5" />
-              {format(new Date(task.due_at), "d MMM, h:mm a")}
+              <Calendar className="size-3.5" />
+              {format(toIST(task.due_at), "d MMM yyyy")}
             </span>
           ) : null}
           {task.assigneeName ? (

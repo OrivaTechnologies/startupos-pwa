@@ -27,6 +27,23 @@ export function istDayEndUtc(dateStr: string): Date {
   return fromIST(`${dateStr}T23:59:59.999`);
 }
 
+// "2026-10-17" — the IST calendar date of a UTC instant.
+export function istDateKey(date: Date | string): string {
+  const zoned = toIST(date);
+  const year = zoned.getFullYear();
+  const month = String(zoned.getMonth() + 1).padStart(2, "0");
+  const day = String(zoned.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// Due dates are a calendar day. Persist the end of that IST day as UTC so the
+// task stays due through the whole day in this region.
+export function dueAtEndOfIstDay(value: string): string | null {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return istDayEndUtc(istDateKey(parsed)).toISOString();
+}
+
 function istParts(date: Date | string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: IST_TIMEZONE,
