@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import {
   startOfMonth,
   startOfYear,
@@ -8,14 +9,37 @@ import {
   differenceInCalendarDays,
   differenceInCalendarMonths,
 } from "date-fns";
-import type { createClient } from "@/lib/supabase/server";
+import { createClient, type createClient as CreateClient } from "@/lib/supabase/server";
+import { getSessionContext } from "@/lib/session";
 import type { TaskStatus } from "@/lib/supabase/types";
 
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type SupabaseClient = Awaited<ReturnType<typeof CreateClient>>;
 
-export type TasksTab = "all" | "mine" | "archived";
+type LedgerRow = {
+  transaction_type: "expense" | "income" | "transfer";
+  amount: number;
+  category_id: string | null;
+  date_time: string;
+};
 
-export async function getCategories(supabase: SupabaseClient) {
+// Shared by the home dashboard, cash-flow card, and analysis page so a single
+// request does not scan the transactions table more than once.
+const loadLedgerRows = cache(async (): Promise<LedgerRow[]> => {
+  const started = Date.now();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("transaction_type, amount, category_id, date_time");
+  if (error) throw error;
+  if (process.env.NODE_ENV === "development") {
+    const elapsed = Date.now() - started;
+    if (elapsed > 250) console.info(`[perf] ledger rows ${elapsed}ms`);
+  }
+  return data ?? [];
+});
+
+const loadCategories = cache(async () => {
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
     .select("*")
@@ -23,16 +47,38 @@ export async function getCategories(supabase: SupabaseClient) {
     .order("sort_order");
   if (error) throw error;
   return data;
+});
+
+const loadProjects = cache(async () => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("projects").select("*").order("name");
+  if (error) throw error;
+  return data ?? [];
+});
+
+const loadTaskMembers = cache(async (): Promise<TaskMember[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, avatar_url")
+    .order("full_name");
+  if (error) logAndThrow("getTaskMembers", error);
+  return data.map((p) => ({
+    id: p.id,
+    name: p.full_name || p.email,
+    avatarUrl: p.avatar_url,
+  }));
+});
+
+export type TasksTab = "all" | "mine" | "archived";
+
+export async function getCategories(_supabase: SupabaseClient) {
+  return loadCategories();
 }
 
-export async function getProjects(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from("projects")
-    .select("*")
-    .eq("is_archived", false)
-    .order("name");
-  if (error) throw error;
-  return data;
+export async function getProjects(_supabase: SupabaseClient) {
+  const projects = await loadProjects();
+  return projects.filter((project) => !project.is_archived);
 }
 
 export async function getTags(supabase: SupabaseClient) {
@@ -196,18 +242,16 @@ async function attachLookups(
     destination_account_id: string | null;
   }[]
 ): Promise<TransactionListItem[]> {
-  const [categories, { data: accounts, error }, { data: projects, error: projectsError }] =
-    await Promise.all([
-      getCategories(supabase),
-      supabase.from("accounts").select("id, name"),
-      supabase.from("projects").select("id, name"),
-    ]);
+  const [categories, { data: accounts, error }, projects] = await Promise.all([
+    getCategories(supabase),
+    supabase.from("accounts").select("id, name"),
+    loadProjects(),
+  ]);
   if (error) throw error;
-  if (projectsError) throw projectsError;
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const accountById = new Map(accounts.map((a) => [a.id, a]));
-  const projectById = new Map((projects ?? []).map((p) => [p.id, p]));
+  const projectById = new Map(projects.map((p) => [p.id, p]));
 
   return transactions.map((t) => ({
     id: t.id,
@@ -266,17 +310,16 @@ export async function getTransactionsForRecords(
 
 export async function getHomeDashboardData(supabase: SupabaseClient) {
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const monthStartMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-  const [{ data: monthTransactions, error }, recentTransactions, categories] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("transaction_type, amount, category_id, date_time")
-      .gte("date_time", monthStart),
+  const [ledgerRows, recentTransactions, categories] = await Promise.all([
+    loadLedgerRows(),
     getRecentTransactions(supabase, 5),
     getCategories(supabase),
   ]);
-  if (error) throw error;
+  const monthTransactions = ledgerRows.filter(
+    (row) => new Date(row.date_time).getTime() >= monthStartMs
+  );
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
@@ -316,23 +359,18 @@ export interface CashFlowTotals {
 }
 
 export async function getCashFlowSummary(
-  supabase: SupabaseClient
+  _supabase: SupabaseClient
 ): Promise<Record<CashFlowPeriod, CashFlowTotals>> {
   const now = new Date();
-  const monthStart = startOfMonth(now).toISOString();
-  const yearStart = startOfYear(now).toISOString();
+  const monthStartMs = startOfMonth(now).getTime();
+  const yearStartMs = startOfYear(now).getTime();
+  const rows = await loadLedgerRows();
 
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("transaction_type, amount, date_time");
-  if (error) throw error;
-  const rows = data ?? [];
-
-  function totalsSince(fromIso: string | null): CashFlowTotals {
+  function totalsSince(fromMs: number | null): CashFlowTotals {
     let income = 0;
     let spending = 0;
     for (const t of rows) {
-      if (fromIso && t.date_time < fromIso) continue;
+      if (fromMs !== null && new Date(t.date_time).getTime() < fromMs) continue;
       if (t.transaction_type === "income") income += t.amount;
       else if (t.transaction_type === "expense") spending += t.amount;
     }
@@ -340,8 +378,8 @@ export async function getCashFlowSummary(
   }
 
   return {
-    thisMonth: totalsSince(monthStart),
-    thisYear: totalsSince(yearStart),
+    thisMonth: totalsSince(monthStartMs),
+    thisYear: totalsSince(yearStartMs),
     allTime: totalsSince(null),
   };
 }
@@ -360,13 +398,11 @@ export async function getAnalysisData(supabase: SupabaseClient) {
   const thisMonthStart = startOfMonth(now);
   const thisYearStart = startOfYear(now);
 
-  const [{ data: transactionRows, error }, categories, accounts] = await Promise.all([
-    supabase.from("transactions").select("transaction_type, amount, category_id, date_time"),
+  const [transactions, categories, accounts] = await Promise.all([
+    loadLedgerRows(),
     getCategories(supabase),
     getAccountsWithPaymentModes(supabase),
   ]);
-  if (error) throw error;
-  const transactions = transactionRows ?? [];
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
@@ -451,18 +487,8 @@ export async function getAnalysisData(supabase: SupabaseClient) {
   };
 }
 
-export async function getCurrentProfile(supabase: SupabaseClient) {
-  const { data: claims } = await supabase.auth.getClaims();
-  const userId = claims?.claims?.sub;
-  if (!userId) return null;
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, avatar_url, role, created_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+export async function getCurrentProfile(_supabase: SupabaseClient) {
+  return (await getSessionContext()).profile;
 }
 
 export interface TaskMember {
@@ -481,17 +507,8 @@ function logAndThrow(context: string, error: unknown, extra?: Record<string, unk
   throw error;
 }
 
-export async function getTaskMembers(supabase: SupabaseClient): Promise<TaskMember[]> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, avatar_url")
-    .order("full_name");
-  if (error) logAndThrow("getTaskMembers", error);
-  return data.map((p) => ({
-    id: p.id,
-    name: p.full_name || p.email,
-    avatarUrl: p.avatar_url,
-  }));
+export async function getTaskMembers(_supabase: SupabaseClient): Promise<TaskMember[]> {
+  return loadTaskMembers();
 }
 
 export interface TaskListItem {

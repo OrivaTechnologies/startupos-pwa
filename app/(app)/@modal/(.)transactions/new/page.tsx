@@ -6,9 +6,10 @@ import { TransactionModalShell } from "@/components/transaction-form/transaction
 
 export default async function NewTransactionModal() {
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const { categories, projects, accounts, tagNames, defaultAccountId } =
-    await getTransactionFormData(supabase);
+  const [, { categories, projects, accounts, tagNames, defaultAccountId }] = await Promise.all([
+    requireTool(supabase, "ledger"),
+    getTransactionFormData(supabase),
+  ]);
 
   return (
     <TransactionModalShell>

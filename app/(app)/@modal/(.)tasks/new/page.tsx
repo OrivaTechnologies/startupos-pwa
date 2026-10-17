@@ -6,8 +6,10 @@ import { TaskModalShell } from "@/components/tasks/task-modal-shell";
 
 export default async function NewTaskModal() {
   const supabase = await createClient();
-  await requireTool(supabase, "tasks");
-  const members = await getTaskMembers(supabase);
+  const [, members] = await Promise.all([
+    requireTool(supabase, "tasks"),
+    getTaskMembers(supabase),
+  ]);
 
   return (
     <TaskModalShell>

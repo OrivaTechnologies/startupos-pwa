@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, ArrowLeftRight, BarChart3, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,17 +35,32 @@ function NavLink({
   tab: (typeof TABS)[number];
   active: boolean;
 }) {
-  const Icon = tab.icon;
   return (
-    <Link
-      href={tab.href}
+    <Link href={tab.href} className="flex flex-1">
+      <NavLinkFace tab={tab} active={active} />
+    </Link>
+  );
+}
+
+function NavLinkFace({
+  tab,
+  active,
+}: {
+  tab: (typeof TABS)[number];
+  active: boolean;
+}) {
+  const { pending } = useLinkStatus();
+  const Icon = tab.icon;
+  const selected = active || pending;
+  return (
+    <span
       className={cn(
         "flex flex-1 flex-col items-center gap-1 py-3 text-xs",
-        active ? "text-primary" : "text-muted-foreground"
+        selected ? "text-primary" : "text-muted-foreground"
       )}
     >
       <Icon className="size-5" />
       {tab.label}
-    </Link>
+    </span>
   );
 }

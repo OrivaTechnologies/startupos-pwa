@@ -5,9 +5,10 @@ import { TransactionFormRoute } from "@/components/transaction-form/transaction-
 
 export default async function NewTransactionPage() {
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const { categories, projects, accounts, tagNames, defaultAccountId } =
-    await getTransactionFormData(supabase);
+  const [, { categories, projects, accounts, tagNames, defaultAccountId }] = await Promise.all([
+    requireTool(supabase, "ledger"),
+    getTransactionFormData(supabase),
+  ]);
 
   return (
     <div className="flex h-svh flex-col">

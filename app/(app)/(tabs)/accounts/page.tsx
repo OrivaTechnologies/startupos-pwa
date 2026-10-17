@@ -9,8 +9,8 @@ import { Card } from "@/components/ui/card";
 
 export default async function AccountsPage() {
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const [accounts, defaultAccount, profile] = await Promise.all([
+  const [, accounts, defaultAccount, profile] = await Promise.all([
+    requireTool(supabase, "ledger"),
     getAccountsWithPaymentModes(supabase),
     getDefaultAccount(supabase),
     getCurrentProfile(supabase),

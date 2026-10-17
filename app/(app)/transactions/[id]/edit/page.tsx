@@ -16,8 +16,8 @@ export default async function EditTransactionPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
-  await requireTool(supabase, "ledger");
-  const [formData, existing, profile, receipts] = await Promise.all([
+  const [, formData, existing, profile, receipts] = await Promise.all([
+    requireTool(supabase, "ledger"),
     getTransactionFormData(supabase),
     getTransactionWithTags(supabase, id),
     getCurrentProfile(supabase),
@@ -25,8 +25,6 @@ export default async function EditTransactionPage({
   ]);
 
   if (!existing) notFound();
-
-  console.log(`[EditTransactionPage] id=${id} receipts.length=${receipts.length}`, receipts);
 
   return (
     <div className="flex h-svh flex-col">

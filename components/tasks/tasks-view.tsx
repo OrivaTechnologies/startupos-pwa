@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import type { TaskListItem, TasksTab } from "@/lib/queries";
 import type { UserRole } from "@/lib/supabase/types";
 import { UserAvatarLink } from "@/components/user-avatar-link";
 import { TaskRow } from "@/components/tasks/task-row";
+import { TaskListSkeleton } from "@/components/tasks/task-list-skeleton";
 import { TaskFilters, ALL_FILTER } from "@/components/tasks/task-filters";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +21,11 @@ const TABS: { id: TasksTab; label: string }[] = [
   { id: "mine", label: "My Tasks" },
   { id: "archived", label: "Archived" },
 ];
+
+function parseClientTab(value: string | null): TasksTab {
+  if (value === "mine" || value === "archived") return value;
+  return "all";
+}
 
 export function TasksView({
   tasks,
@@ -40,6 +47,10 @@ export function TasksView({
   assigneeOptions: [string, string][];
 }) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  // The URL updates as soon as a tab is clicked. `tab` is the list the server
+  // has actually returned, so a mismatch means that response is still in flight.
+  const requestedTab = parseClientTab(useSearchParams().get("tab"));
+  const listPending = requestedTab !== tab;
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState(ALL_FILTER);
   const [assigneeFilter, setAssigneeFilter] = useState(ALL_FILTER);
@@ -60,7 +71,7 @@ export function TasksView({
     setPage(0);
   }
 
-  const showAssigneeFilter = tab === "all";
+  const showAssigneeFilter = requestedTab === "all";
 
   const filteredTasks = tasks
     .filter((t) => statusFilter === ALL_FILTER || t.status === statusFilter)
@@ -95,11 +106,13 @@ export function TasksView({
       <div className="flex items-center justify-between gap-3 px-4 pt-2 pb-3 md:pt-4 md:pb-4">
         <h1 className="min-w-0 flex-1 text-lg font-semibold leading-none">
           <span className="md:hidden">Tasks</span>
-          <span className="hidden md:inline">{TABS.find((t) => t.id === tab)?.label ?? "Tasks"}</span>
+          <span className="hidden md:inline">
+            {TABS.find((t) => t.id === requestedTab)?.label ?? "Tasks"}
+          </span>
         </h1>
 
         <div className="flex shrink-0 items-center gap-2">
-          {tab !== "archived" ? (
+          {requestedTab !== "archived" ? (
             <Link
               href="/tasks/new"
               className="hidden items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-transform hover:bg-primary/90 active:scale-95 md:flex"
@@ -126,7 +139,7 @@ export function TasksView({
         className="mx-4 mb-3 grid grid-cols-3 gap-1 rounded-xl bg-secondary/40 p-1 md:hidden"
       >
         {TABS.map((item) => {
-          const active = item.id === tab;
+          const active = item.id === requestedTab;
           return (
             <Link
               key={item.id}
@@ -145,7 +158,7 @@ export function TasksView({
         })}
       </nav>
 
-      {tab !== "archived" ? (
+      {requestedTab !== "archived" ? (
         <TaskFilters
           className="mx-4 mb-3 rounded-xl bg-secondary/40 px-3 py-2.5"
           statusValue={statusFilter}
@@ -158,7 +171,9 @@ export function TasksView({
       ) : null}
 
       <div className="flex flex-col gap-3.5 px-4">
-        {visibleTasks.length > 0 ? (
+        {listPending ? (
+          <TaskListSkeleton />
+        ) : visibleTasks.length > 0 ? (
           visibleTasks.map((task) => (
             <TaskRow
               key={task.id}
@@ -219,7 +234,7 @@ export function TasksView({
         ) : null}
       </div>
 
-      {tab !== "archived" ? (
+      {requestedTab !== "archived" ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 md:hidden">
           <div className="mx-auto flex w-full max-w-md justify-end px-4">
             <Link

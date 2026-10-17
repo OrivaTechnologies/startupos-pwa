@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Home,
@@ -153,16 +153,34 @@ function SidebarLink({
   children: React.ReactNode;
 }) {
   return (
-    <Link
-      href={href}
+    <Link href={href} className={cn("block w-full", className)}>
+      <SidebarLinkFace active={active} icon={Icon}>
+        {children}
+      </SidebarLinkFace>
+    </Link>
+  );
+}
+
+function SidebarLinkFace({
+  active,
+  icon: Icon,
+  children,
+}: {
+  active: boolean;
+  icon: typeof Home;
+  children: React.ReactNode;
+}) {
+  const { pending } = useLinkStatus();
+  const selected = active || pending;
+  return (
+    <span
       className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
-        className
+        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+        selected ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
       )}
     >
       <Icon className="size-4" />
       {children}
-    </Link>
+    </span>
   );
 }
