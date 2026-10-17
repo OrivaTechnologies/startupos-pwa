@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Circle,
-  CircleDot,
-  CheckCircle2,
-  Users,
-  ListFilter,
-  type LucideIcon,
-} from "lucide-react";
+import { Circle, CircleDot, CheckCircle2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -50,13 +43,11 @@ function GlyphFilterSelect({
   value,
   onValueChange,
   allLabel,
-  allIcon: AllIcon,
   options,
 }: {
   value: string;
   onValueChange: (value: string) => void;
   allLabel: string;
-  allIcon: LucideIcon;
   options: GlyphOption[];
 }) {
   const isActive = value !== ALL_FILTER;
@@ -74,15 +65,7 @@ function GlyphFilterSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL_FILTER} className={cn("gap-2.5", !isActive && "text-primary")}>
-          <span
-            className={cn(
-              "flex size-6 shrink-0 items-center justify-center rounded-md",
-              !isActive ? "bg-primary/15 text-primary" : "bg-secondary text-secondary-foreground"
-            )}
-          >
-            <AllIcon className="size-3.5" />
-          </span>
+        <SelectItem value={ALL_FILTER} className={cn(!isActive && "text-primary")}>
           {allLabel}
         </SelectItem>
         <SelectSeparator />
@@ -127,15 +110,7 @@ function AssigneeFilterSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL_FILTER} className={cn("gap-2.5", !isActive && "text-primary")}>
-          <span
-            className={cn(
-              "flex size-6 shrink-0 items-center justify-center rounded-md",
-              !isActive ? "bg-primary/15 text-primary" : "bg-secondary text-secondary-foreground"
-            )}
-          >
-            <Users className="size-3.5" />
-          </span>
+        <SelectItem value={ALL_FILTER} className={cn(!isActive && "text-primary")}>
           All assignees
         </SelectItem>
         <SelectSeparator />
@@ -175,7 +150,6 @@ export function TaskFilters({
         value={statusValue}
         onValueChange={onStatusChange}
         allLabel="All statuses"
-        allIcon={ListFilter}
         options={TASK_STATUS_ORDER.map((s) => ({
           value: s,
           label: TASK_STATUS_LABEL[s],

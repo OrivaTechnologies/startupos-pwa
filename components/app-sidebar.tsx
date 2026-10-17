@@ -100,21 +100,23 @@ export function AppSidebar({
 
       <div className="mt-4 flex shrink-0 flex-col gap-3 border-t border-glass-border pt-4">
         {canSwitchWorkspace ? (
-          <SwitcherRow
-            label="Active workspace"
-            variant="compact"
-            current={{
-              id: currentWorkspaceOption.id,
-              label: currentWorkspaceOption.label,
-              icon: currentWorkspaceOption.icon,
-            }}
-            options={WORKSPACE_OPTIONS}
-            onSelect={(id) => switchWorkspace(id as WorkspaceId, router)}
-            confirm={{
-              title: (option) => `Switch to ${option.label}?`,
-              description: () => "You'll leave what you're doing here and switch context.",
-            }}
-          />
+          <div className="pb-3">
+            <SwitcherRow
+              label="Active workspace"
+              variant="compact"
+              current={{
+                id: currentWorkspaceOption.id,
+                label: currentWorkspaceOption.label,
+                icon: currentWorkspaceOption.icon,
+              }}
+              options={WORKSPACE_OPTIONS}
+              onSelect={(id) => switchWorkspace(id as WorkspaceId, router)}
+              confirm={{
+                title: (option) => `Switch to ${option.label}?`,
+                description: () => "You'll leave what you're doing here and switch context.",
+              }}
+            />
+          </div>
         ) : null}
 
         <Link
