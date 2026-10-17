@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { istDayEndUtc, toIST } from "@/lib/datetime";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -53,11 +54,13 @@ function to24Hour(hour12: number, period: "AM" | "PM") {
 export function DateTimePicker({
   value,
   onChange,
+  dateOnly = false,
 }: {
   value: string;
   onChange: (isoValue: string) => void;
+  dateOnly?: boolean;
 }) {
-  const current = new Date(value);
+  const current = dateOnly ? toIST(value) : new Date(value);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(current);
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(current));
@@ -91,7 +94,11 @@ export function DateTimePicker({
   }
 
   function handleDone() {
-    onChange(draft.toISOString());
+    if (dateOnly) {
+      onChange(istDayEndUtc(format(draft, "yyyy-MM-dd")).toISOString());
+    } else {
+      onChange(draft.toISOString());
+    }
     setOpen(false);
   }
 
@@ -112,15 +119,17 @@ export function DateTimePicker({
             <CalendarIcon className="size-4 text-muted-foreground" />
             {format(current, "d MMM yyyy")}
           </span>
-          <span className="flex items-center gap-1.5">
-            <Clock className="size-4 text-muted-foreground" />
-            {format(current, "hh:mm a")}
-          </span>
+          {dateOnly ? null : (
+            <span className="flex items-center gap-1.5">
+              <Clock className="size-4 text-muted-foreground" />
+              {format(current, "hh:mm a")}
+            </span>
+          )}
         </button>
       </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader className="flex-row items-center justify-between space-y-0">
-          <DrawerTitle>Date &amp; time</DrawerTitle>
+          <DrawerTitle>{dateOnly ? "Date" : "Date & time"}</DrawerTitle>
           <DrawerClose asChild>
             <button
               type="button"
@@ -185,6 +194,7 @@ export function DateTimePicker({
             })}
           </div>
 
+          {dateOnly ? null : (
           <div className="flex items-center gap-2 border-t border-border pt-4">
             <Select value={String(hour12)} onValueChange={(v) => selectHour(Number(v))}>
               <SelectTrigger className="flex-1 justify-center">
@@ -232,6 +242,7 @@ export function DateTimePicker({
               ))}
             </div>
           </div>
+          )}
         </div>
 
         <DrawerFooter>

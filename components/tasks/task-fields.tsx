@@ -1,6 +1,6 @@
 "use client";
 
-import { X, CalendarClock, UserRound } from "lucide-react";
+import { X, Calendar, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -12,17 +12,11 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DateTimePicker } from "@/components/transaction-form/date-time-picker";
+import { dueAtEndOfIstDay, istDateKey, istDayEndUtc } from "@/lib/datetime";
 import { AttachmentUploader } from "@/components/transaction-form/attachment-uploader";
-import { BACKLOG_SPRINT_ID, type SprintSummary } from "@/lib/sprints";
-import { TASK_TYPE_ORDER, TASK_TYPE_LABEL, TASK_PRIORITY_ORDER, TASK_PRIORITY_LABEL } from "@/lib/task-meta";
 import type { TaskMember, TaskAttachmentWithUrl } from "@/lib/queries";
-import type { TaskType, TaskPriority } from "@/lib/supabase/types";
 
 export const UNASSIGNED = "unassigned";
-
-function sprintLabel(sprint: SprintSummary) {
-  return sprint.status === "active" ? `Sprint ${sprint.number} (Active)` : `Sprint ${sprint.number}`;
-}
 
 function memberInitials(name: string) {
   return (
@@ -66,13 +60,6 @@ export function TaskFields({
   onAssigneeChange,
   dueAt,
   onDueAtChange,
-  sprintId,
-  onSprintChange,
-  sprints,
-  taskType,
-  onTaskTypeChange,
-  priority,
-  onPriorityChange,
   members,
   images,
   onImagesChange,
@@ -89,13 +76,6 @@ export function TaskFields({
   onAssigneeChange: (value: string) => void;
   dueAt: string | null;
   onDueAtChange: (value: string | null) => void;
-  sprintId: string;
-  onSprintChange: (value: string) => void;
-  sprints: SprintSummary[];
-  taskType: TaskType;
-  onTaskTypeChange: (value: TaskType) => void;
-  priority: TaskPriority;
-  onPriorityChange: (value: TaskPriority) => void;
   members: TaskMember[];
   images: File[];
   onImagesChange: (files: File[]) => void;
@@ -157,7 +137,11 @@ export function TaskFields({
           <FieldLabel>Due date</FieldLabel>
           {dueAt ? (
             <div className="flex h-11 items-center justify-between rounded-lg border border-input px-3">
-              <DateTimePicker value={dueAt} onChange={onDueAtChange} />
+              <DateTimePicker
+                dateOnly
+                value={dueAtEndOfIstDay(dueAt) ?? dueAt}
+                onChange={onDueAtChange}
+              />
               <button
                 type="button"
                 aria-label="Remove due date"
@@ -172,72 +156,13 @@ export function TaskFields({
             <button
               type="button"
               disabled={disabled}
-              onClick={() => onDueAtChange(new Date().toISOString())}
+              onClick={() => onDueAtChange(istDayEndUtc(istDateKey(new Date())).toISOString())}
               className="flex h-11 items-center gap-2 rounded-lg border border-dashed border-input px-3 text-sm text-muted-foreground transition-colors hover:border-solid hover:text-foreground disabled:opacity-50"
             >
-              <CalendarClock className="size-4" />
-              Set a due date &amp; time
+              <Calendar className="size-4" />
+              Set a due date
             </button>
           )}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-5 md:grid md:grid-cols-3 md:gap-4">
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>Sprint</FieldLabel>
-          <Select value={sprintId} onValueChange={onSprintChange} disabled={disabled}>
-            <SelectTrigger size="lg" className="w-full px-3.5">
-              <SelectValue placeholder="Sprint" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={BACKLOG_SPRINT_ID}>Backlog</SelectItem>
-              {sprints.map((sprint) => (
-                <SelectItem key={sprint.id} value={sprint.id}>
-                  {sprintLabel(sprint)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>Type</FieldLabel>
-          <Select
-            value={taskType}
-            onValueChange={(value) => onTaskTypeChange(value as TaskType)}
-            disabled={disabled}
-          >
-            <SelectTrigger size="lg" className="w-full px-3.5">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_TYPE_ORDER.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {TASK_TYPE_LABEL[type]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>Priority</FieldLabel>
-          <Select
-            value={priority}
-            onValueChange={(value) => onPriorityChange(value as TaskPriority)}
-            disabled={disabled}
-          >
-            <SelectTrigger size="lg" className="w-full px-3.5">
-              <SelectValue placeholder="Priority" />
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_PRIORITY_ORDER.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {TASK_PRIORITY_LABEL[p]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
@@ -248,7 +173,7 @@ export function TaskFields({
           onChange={onImagesChange}
           existingReceipts={existingAttachments}
           onRemoveExisting={onRemoveExistingAttachment}
-          fileAccept="image/*"
+          fileAccept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.txt"
         />
       </div>
     </div>

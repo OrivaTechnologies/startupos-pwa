@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { ArrowLeftRight } from "lucide-react";
 import { CategoryIcon } from "@/lib/categories";
 import { formatCurrency, cn } from "@/lib/utils";
+import { toIST } from "@/lib/datetime";
 import type { TransactionListItem } from "@/lib/queries";
 
 const AMOUNT_COLOR: Record<TransactionListItem["transaction_type"], string> = {
@@ -52,7 +53,7 @@ export function TransactionRow({ transaction }: { transaction: TransactionListIt
           {AMOUNT_PREFIX[transaction.transaction_type]}
           {formatCurrency(transaction.amount, transaction.currency)}
         </p>
-        <p className="text-xs text-muted-foreground">{format(new Date(transaction.date_time), "d MMM")}</p>
+        <p className="text-xs text-muted-foreground">{format(toIST(transaction.date_time), "d MMM")}</p>
       </div>
     </Link>
   );
