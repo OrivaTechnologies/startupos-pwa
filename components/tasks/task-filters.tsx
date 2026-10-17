@@ -4,16 +4,7 @@ import {
   Circle,
   CircleDot,
   CheckCircle2,
-  Minus,
-  ArrowUp,
-  OctagonAlert,
-  Bug,
-  Sparkles,
-  TrendingUp,
-  Shapes,
   Users,
-  Flag,
-  Layers,
   ListFilter,
   type LucideIcon,
 } from "lucide-react";
@@ -27,29 +18,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
-import { TASK_TYPE_ORDER, TASK_TYPE_LABEL, TASK_PRIORITY_ORDER, TASK_PRIORITY_LABEL } from "@/lib/task-meta";
-import type { TaskStatus, TaskType, TaskPriority } from "@/lib/supabase/types";
+import type { TaskStatus } from "@/lib/supabase/types";
 
 export const ALL_FILTER = "all";
 
 const STATUS_GLYPH: Record<TaskStatus, { icon: LucideIcon; className: string }> = {
-  todo: { icon: Circle, className: "bg-secondary text-secondary-foreground" },
+  pending: { icon: Circle, className: "bg-secondary text-secondary-foreground" },
   in_progress: { icon: CircleDot, className: "bg-amber-500/15 text-amber-500" },
   done: { icon: CheckCircle2, className: "bg-primary/15 text-primary" },
-};
-
-const PRIORITY_GLYPH: Record<TaskPriority, { icon: LucideIcon; className: string }> = {
-  low: { icon: Circle, className: "bg-secondary text-secondary-foreground" },
-  medium: { icon: Minus, className: "bg-sky-500/15 text-sky-500" },
-  high: { icon: ArrowUp, className: "bg-amber-500/15 text-amber-500" },
-  critical: { icon: OctagonAlert, className: "bg-destructive/15 text-destructive" },
-};
-
-const TYPE_GLYPH: Record<TaskType, { icon: LucideIcon; className: string }> = {
-  bug: { icon: Bug, className: "bg-destructive/15 text-destructive" },
-  new_requirement: { icon: Sparkles, className: "bg-sky-500/15 text-sky-500" },
-  enhancement: { icon: TrendingUp, className: "bg-primary/15 text-primary" },
-  other: { icon: Shapes, className: "bg-secondary text-secondary-foreground" },
 };
 
 function initials(name: string) {
@@ -70,9 +46,6 @@ interface GlyphOption {
   className: string;
 }
 
-// One pill-style filter: an icon + label trigger (highlighted when a
-// specific value is picked) opening a list of icon-boxed options, each
-// tinted to match its meaning (priority severity, status progress, etc).
 function GlyphFilterSelect({
   value,
   onValueChange,
@@ -98,9 +71,6 @@ function GlyphFilterSelect({
             : "border-border text-foreground"
         )}
       >
-        {/* SelectValue mirrors the selected item's own children (icon +
-            label), so no separate icon is rendered here — adding one would
-            just duplicate it. */}
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -154,9 +124,6 @@ function AssigneeFilterSelect({
             : "border-border text-foreground"
         )}
       >
-        {/* SelectValue mirrors the selected item's own children (avatar +
-            name), so no separate avatar is rendered here — adding one
-            would just duplicate it. */}
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -185,72 +152,43 @@ function AssigneeFilterSelect({
   );
 }
 
-// Shared by the Backlog list (all four filters) and the Kanban board
-// (assignee/priority/type only — status is already the column split).
 export function TaskFilters({
   statusValue,
   onStatusChange,
   assigneeValue,
   onAssigneeChange,
   assigneeOptions,
-  priorityValue,
-  onPriorityChange,
-  typeValue,
-  onTypeChange,
+  showAssigneeFilter = true,
   className,
 }: {
-  statusValue?: string;
-  onStatusChange?: (value: string) => void;
+  statusValue: string;
+  onStatusChange: (value: string) => void;
   assigneeValue: string;
   onAssigneeChange: (value: string) => void;
   assigneeOptions: [string, string][];
-  priorityValue: string;
-  onPriorityChange: (value: string) => void;
-  typeValue: string;
-  onTypeChange: (value: string) => void;
+  showAssigneeFilter?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
-      {statusValue !== undefined && onStatusChange ? (
-        <GlyphFilterSelect
-          value={statusValue}
-          onValueChange={onStatusChange}
-          allLabel="All statuses"
-          allIcon={ListFilter}
-          options={TASK_STATUS_ORDER.map((s) => ({
-            value: s,
-            label: TASK_STATUS_LABEL[s],
-            ...STATUS_GLYPH[s],
-          }))}
+      <GlyphFilterSelect
+        value={statusValue}
+        onValueChange={onStatusChange}
+        allLabel="All statuses"
+        allIcon={ListFilter}
+        options={TASK_STATUS_ORDER.map((s) => ({
+          value: s,
+          label: TASK_STATUS_LABEL[s],
+          ...STATUS_GLYPH[s],
+        }))}
+      />
+      {showAssigneeFilter ? (
+        <AssigneeFilterSelect
+          value={assigneeValue}
+          onValueChange={onAssigneeChange}
+          options={assigneeOptions}
         />
       ) : null}
-
-      <AssigneeFilterSelect value={assigneeValue} onValueChange={onAssigneeChange} options={assigneeOptions} />
-
-      <GlyphFilterSelect
-        value={priorityValue}
-        onValueChange={onPriorityChange}
-        allLabel="All priorities"
-        allIcon={Flag}
-        options={TASK_PRIORITY_ORDER.map((p) => ({
-          value: p,
-          label: TASK_PRIORITY_LABEL[p],
-          ...PRIORITY_GLYPH[p],
-        }))}
-      />
-
-      <GlyphFilterSelect
-        value={typeValue}
-        onValueChange={onTypeChange}
-        allLabel="All types"
-        allIcon={Layers}
-        options={TASK_TYPE_ORDER.map((t) => ({
-          value: t,
-          label: TASK_TYPE_LABEL[t],
-          ...TYPE_GLYPH[t],
-        }))}
-      />
     </div>
   );
 }

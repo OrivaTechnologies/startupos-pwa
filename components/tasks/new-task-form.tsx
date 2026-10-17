@@ -6,23 +6,13 @@ import { toast } from "sonner";
 import { ChevronLeft, Save, Loader2 } from "lucide-react";
 import { createTask } from "@/app/(app)/tasks/actions";
 import { TaskFields, UNASSIGNED } from "@/components/tasks/task-fields";
-import { BACKLOG_SPRINT_ID, type SprintSummary } from "@/lib/sprints";
 import type { TaskMember } from "@/lib/queries";
-import type { TaskType, TaskPriority } from "@/lib/supabase/types";
 
 export function NewTaskForm({
-  projectId,
-  projectName,
   members,
-  sprints,
-  initialSprintId,
   mode = "page",
 }: {
-  projectId: string;
-  projectName: string;
   members: TaskMember[];
-  sprints: SprintSummary[];
-  initialSprintId?: string;
   mode?: "modal" | "page";
 }) {
   const router = useRouter();
@@ -30,9 +20,6 @@ export function NewTaskForm({
   const [description, setDescription] = useState("");
   const [dueAt, setDueAt] = useState<string | null>(null);
   const [assigneeId, setAssigneeId] = useState(UNASSIGNED);
-  const [sprintId, setSprintId] = useState(initialSprintId ?? BACKLOG_SPRINT_ID);
-  const [taskType, setTaskType] = useState<TaskType>("other");
-  const [priority, setPriority] = useState<TaskPriority>("medium");
   const [images, setImages] = useState<File[]>([]);
   const [isSaving, startSaving] = useTransition();
 
@@ -44,27 +31,20 @@ export function NewTaskForm({
   function handleSave() {
     const trimmed = title.trim();
     if (!trimmed) return;
-    const resolvedAssigneeId = assigneeId === UNASSIGNED ? null : assigneeId;
+    const formData = new FormData();
+    formData.set("title", trimmed);
+    formData.set("description", description);
+    if (dueAt) formData.set("due_at", dueAt);
+    formData.set("assignee_id", assigneeId);
+    images.forEach((file) => formData.append("attachments", file));
+
     startSaving(async () => {
-      const result = await createTask(
-        projectId,
-        trimmed,
-        description,
-        dueAt,
-        resolvedAssigneeId,
-        images,
-        sprintId,
-        taskType,
-        priority
-      );
+      const result = await createTask(formData);
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      // No router.refresh() here — createTask already revalidates the
-      // /tasks layout server-side, and calling refresh() before close()
-      // raced with the intercepted-route back-navigation, occasionally
-      // rendering this modal as a full page instead of closing it.
+      if (result.attachmentWarning) toast.warning(result.attachmentWarning);
       close();
     });
   }
@@ -80,15 +60,11 @@ export function NewTaskForm({
         >
           <ChevronLeft className="size-5" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-base font-semibold">New task</h1>
-          <p className="text-xs text-muted-foreground">{projectName}</p>
-        </div>
+        <h1 className="flex-1 text-base font-semibold">New task</h1>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6 pt-4">
         <TaskFields
-          autoFocusTitle
           title={title}
           onTitleChange={setTitle}
           description={description}
@@ -97,16 +73,10 @@ export function NewTaskForm({
           onAssigneeChange={setAssigneeId}
           dueAt={dueAt}
           onDueAtChange={setDueAt}
-          sprintId={sprintId}
-          onSprintChange={setSprintId}
-          sprints={sprints}
-          taskType={taskType}
-          onTaskTypeChange={setTaskType}
-          priority={priority}
-          onPriorityChange={setPriority}
           members={members}
           images={images}
           onImagesChange={setImages}
+          autoFocusTitle
         />
       </div>
 
@@ -118,7 +88,7 @@ export function NewTaskForm({
           className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-md shadow-black/20 transition-transform active:scale-95 disabled:opacity-40"
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Add task
+          Create task
         </button>
       </div>
     </div>

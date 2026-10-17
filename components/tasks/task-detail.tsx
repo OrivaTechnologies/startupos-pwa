@@ -14,6 +14,8 @@ import {
   Trash2,
   Save,
   Loader2,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { canMutateRecord } from "@/lib/permissions";
@@ -30,12 +32,12 @@ import {
   deleteTask,
   setTaskStatus,
   deleteTaskAttachment,
+  setTaskArchived,
 } from "@/app/(app)/tasks/actions";
 import { TASK_STATUS_ORDER, TASK_STATUS_LABEL } from "@/lib/task-status";
 import { TaskFields, UNASSIGNED } from "@/components/tasks/task-fields";
-import { BACKLOG_SPRINT_ID, type SprintSummary } from "@/lib/sprints";
 import type { TaskDetailData, TaskMember, TaskAttachmentWithUrl } from "@/lib/queries";
-import type { TaskStatus, UserRole, TaskType, TaskPriority } from "@/lib/supabase/types";
+import type { TaskStatus, UserRole } from "@/lib/supabase/types";
 
 function StatusDropdown({
   status,
@@ -90,9 +92,7 @@ function StatusDropdown({
 
 export function TaskDetail({
   task,
-  keyPrefix,
   members,
-  sprints,
   creatorName,
   initialAttachments = [],
   currentUserId,
@@ -100,9 +100,7 @@ export function TaskDetail({
   mode = "page",
 }: {
   task: TaskDetailData;
-  keyPrefix: string;
   members: TaskMember[];
-  sprints: SprintSummary[];
   creatorName: string | null;
   initialAttachments?: TaskAttachmentWithUrl[];
   currentUserId?: string;
@@ -110,18 +108,17 @@ export function TaskDetail({
   mode?: "modal" | "page";
 }) {
   const router = useRouter();
+  const isArchived = Boolean(task.archived_at);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [dueAt, setDueAt] = useState<string | null>(task.due_at);
   const [assigneeId, setAssigneeId] = useState(task.assignee_id ?? UNASSIGNED);
-  const [sprintId, setSprintId] = useState(task.sprint_id ?? BACKLOG_SPRINT_ID);
-  const [taskType, setTaskType] = useState<TaskType>(task.task_type);
-  const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [status, setStatus] = useState(task.status);
   const [images, setImages] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState(initialAttachments);
   const [isSaving, startSaving] = useTransition();
   const [isToggling, startToggle] = useTransition();
+  const [isArchiving, startArchive] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const canMutate =
@@ -130,11 +127,11 @@ export function TaskDetail({
 
   function close() {
     if (mode === "modal") router.back();
-    else router.push("/tasks");
+    else router.push(isArchived ? "/tasks?tab=archived" : "/tasks");
   }
 
   function changeStatus(next: TaskStatus) {
-    if (next === status) return;
+    if (next === status || isArchived) return;
     startToggle(async () => {
       const result = await setTaskStatus(task.id, next);
       if (result.error) {
@@ -145,30 +142,34 @@ export function TaskDetail({
     });
   }
 
-  function handleSave() {
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    const resolvedAssigneeId = assigneeId === UNASSIGNED ? null : assigneeId;
-    startSaving(async () => {
-      const result = await updateTask(
-        task.id,
-        trimmed,
-        description,
-        dueAt,
-        resolvedAssigneeId,
-        images,
-        sprintId,
-        taskType,
-        priority
-      );
+  function toggleArchive() {
+    startArchive(async () => {
+      const result = await setTaskArchived(task.id, !isArchived);
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      // No router.refresh() here — updateTask already revalidates the
-      // /tasks layout server-side, and calling refresh() before close()
-      // raced with the intercepted-route back-navigation, occasionally
-      // rendering this modal as a full page instead of closing it.
+      close();
+    });
+  }
+
+  function handleSave() {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const formData = new FormData();
+    formData.set("title", trimmed);
+    formData.set("description", description);
+    if (dueAt) formData.set("due_at", dueAt);
+    formData.set("assignee_id", assigneeId);
+    images.forEach((file) => formData.append("attachments", file));
+
+    startSaving(async () => {
+      const result = await updateTask(task.id, formData);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.attachmentWarning) toast.warning(result.attachmentWarning);
       close();
     });
   }
@@ -202,14 +203,37 @@ export function TaskDetail({
           <ChevronLeft className="size-5" />
         </button>
         <h1 className="flex-1 text-base font-semibold">
-          Task <span className="text-muted-foreground">{keyPrefix}-{task.number}</span>
+          Task <span className="text-muted-foreground">TASK-{task.number}</span>
         </h1>
-        <StatusDropdown
-          status={status}
-          isToggling={isToggling}
-          disabled={!canMutate}
-          onChange={changeStatus}
-        />
+        {!isArchived ? (
+          <StatusDropdown
+            status={status}
+            isToggling={isToggling}
+            disabled={!canMutate}
+            onChange={changeStatus}
+          />
+        ) : (
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
+            Archived
+          </span>
+        )}
+        {canMutate ? (
+          <button
+            type="button"
+            onClick={toggleArchive}
+            disabled={isArchiving}
+            aria-label={isArchived ? "Unarchive task" : "Archive task"}
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+          >
+            {isArchiving ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : isArchived ? (
+              <ArchiveRestore className="size-4" />
+            ) : (
+              <Archive className="size-4" />
+            )}
+          </button>
+        ) : null}
         {canMutate ? (
           <button
             type="button"
@@ -232,13 +256,6 @@ export function TaskDetail({
           onAssigneeChange={setAssigneeId}
           dueAt={dueAt}
           onDueAtChange={setDueAt}
-          sprintId={sprintId}
-          onSprintChange={setSprintId}
-          sprints={sprints}
-          taskType={taskType}
-          onTaskTypeChange={setTaskType}
-          priority={priority}
-          onPriorityChange={setPriority}
           members={members}
           images={images}
           onImagesChange={setImages}

@@ -1,58 +1,48 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireTool } from "@/lib/access";
-import { getCurrentProfile, getVisibleTaskProjects, getBacklogTasks } from "@/lib/queries";
-import { resolveProjectId } from "@/lib/task-projects";
-import { UserAvatarLink } from "@/components/user-avatar-link";
-import { TasksBoard } from "@/components/tasks/tasks-board";
-import { NoProjectsEmptyState } from "@/components/tasks/no-projects-empty-state";
+import { getCurrentProfile, getTaskMembers, getTasksForTab, type TasksTab } from "@/lib/queries";
+import { TasksView } from "@/components/tasks/tasks-view";
+
+const VALID_TABS: TasksTab[] = ["all", "mine", "archived"];
+
+function parseTab(value?: string): TasksTab {
+  if (value && VALID_TABS.includes(value as TasksTab)) return value as TasksTab;
+  return "all";
+}
 
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ project?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
-  const { project } = await searchParams;
+  const { tab: tabParam } = await searchParams;
+  const tab = parseTab(tabParam);
   const supabase = await createClient();
   const access = await requireTool(supabase, "tasks");
-  const [profile, projects] = await Promise.all([
-    getCurrentProfile(supabase),
-    getVisibleTaskProjects(supabase),
-  ]);
+  const profile = await getCurrentProfile(supabase);
   const fullName = profile?.full_name || profile?.email || "Account";
 
-  const projectId = resolveProjectId(projects, project);
-  const currentProject = projects.find((p) => p.id === projectId);
-  const projectName = currentProject?.name ?? "";
-  const projectKeyPrefix = currentProject?.keyPrefix ?? "TASK";
-  const tasks = projectId ? await getBacklogTasks(supabase, projectId) : [];
+  const [tasks, members] = profile
+    ? await Promise.all([
+        getTasksForTab(supabase, tab, profile.id),
+        getTaskMembers(supabase),
+      ])
+    : [[], []];
+
+  const assigneeOptions: [string, string][] = members.map((m) => [m.id, m.name]);
 
   return (
-    <div className="tasks-theme mx-auto flex min-h-svh w-full max-w-md flex-col pb-24 md:max-w-none md:pb-6">
-      {/* Mobile only — desktop/tablet keeps profile in the sidebar. */}
-      <div className="flex items-start justify-end px-4 pt-6 pb-4 md:hidden">
-        <UserAvatarLink
-          name={fullName}
-          avatarUrl={profile?.avatar_url}
-          currentModule="tasks"
-          canSwitch={access.tools.length > 1}
-        />
-      </div>
-
-      {projectId ? (
-        <TasksBoard
-          tasks={tasks}
-          projects={projects}
-          projectId={projectId}
-          projectName={projectName}
-          projectKeyPrefix={projectKeyPrefix}
-          currentUserId={profile?.id}
-          currentUserRole={profile?.role}
-        />
-      ) : (
-        <div className="px-4">
-          <NoProjectsEmptyState isAdmin={profile?.role === "admin"} />
-        </div>
-      )}
+    <div className="tasks-theme mx-auto flex min-h-svh w-full max-w-md flex-col pb-24 md:max-w-none md:pb-6 md:pt-2">
+      <TasksView
+        tasks={tasks}
+        tab={tab}
+        currentUserId={profile?.id}
+        currentUserRole={profile?.role}
+        profileName={fullName}
+        profileAvatarUrl={profile?.avatar_url}
+        canSwitchWorkspace={access.tools.length > 1}
+        assigneeOptions={assigneeOptions}
+      />
     </div>
   );
 }

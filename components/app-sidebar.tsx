@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -9,27 +8,28 @@ import {
   BarChart3,
   Landmark,
   ListChecks,
-  CalendarRange,
-  Kanban,
-  Users,
+  UserRound,
+  Archive,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BrandMark } from "@/components/brand-mark";
-import { ProjectFormDialog } from "@/components/tasks/project-form-dialog";
 import { SwitcherRow } from "@/components/switcher";
 import { WORKSPACE_OPTIONS, switchWorkspace } from "@/lib/workspace-options";
-import { getProjectBlockers } from "@/app/(app)/tasks/projects/actions";
 import type { WorkspaceId } from "@/lib/tools";
-import type { ProjectSummary } from "@/lib/task-projects";
-import type { UserRole } from "@/lib/supabase/types";
 
 const LEDGER_TABS = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/analysis", label: "Analysis", icon: BarChart3 },
   { href: "/accounts", label: "Accounts", icon: Landmark },
+] as const;
+
+const TASK_TABS = [
+  { href: "/tasks", tab: "all", label: "All Tasks", icon: ListChecks },
+  { href: "/tasks?tab=mine", tab: "mine", label: "My Tasks", icon: UserRound },
+  { href: "/tasks?tab=archived", tab: "archived", label: "Archived", icon: Archive },
 ] as const;
 
 function initials(name: string) {
@@ -44,37 +44,19 @@ function initials(name: string) {
 export function AppSidebar({
   activeWorkspace,
   canSwitchWorkspace,
-  taskProjects,
-  currentUserRole,
   name,
   avatarUrl,
 }: {
   activeWorkspace: WorkspaceId;
   canSwitchWorkspace: boolean;
-  taskProjects: ProjectSummary[];
-  currentUserRole?: UserRole;
   name: string;
   avatarUrl?: string | null;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
-  const [editProjectOpen, setEditProjectOpen] = useState(false);
-  const [editBlockers, setEditBlockers] = useState<{ sprintCount: number; taskCount: number }>();
-  const currentProjectId = searchParams.get("project") ?? taskProjects[0]?.id;
-  const currentProject = taskProjects.find((p) => p.id === currentProjectId);
+  const tasksTab = searchParams.get("tab") ?? "all";
   const currentWorkspaceOption = WORKSPACE_OPTIONS.find((w) => w.id === activeWorkspace)!;
-
-  function switchProject(id: string) {
-    router.push(`${pathname}?project=${id}`);
-  }
-
-  async function openEditProject() {
-    if (!currentProject) return;
-    setEditBlockers(await getProjectBlockers(currentProject.id));
-    setEditProjectOpen(true);
-  }
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-glass-border bg-glass px-4 py-6 md:sticky md:top-0 md:flex md:h-svh dark:bg-card/30">
@@ -102,87 +84,20 @@ export function AppSidebar({
           </>
         ) : (
           <>
-            <SwitcherRow
-              label="Project"
-              variant="compact"
-              emptyLabel="No project"
-              current={
-                currentProject
-                  ? { id: currentProject.id, label: currentProject.name, avatarUrl: currentProject.avatarUrl }
-                  : undefined
-              }
-              options={taskProjects.map((p) => ({ id: p.id, label: p.name, avatarUrl: p.avatarUrl }))}
-              onSelect={switchProject}
-              onEdit={currentUserRole === "admin" ? openEditProject : undefined}
-              extraAction={
-                currentUserRole === "admin"
-                  ? { label: "New project", onClick: () => setCreateProjectOpen(true) }
-                  : undefined
-              }
-            />
-
-            {currentProjectId ? (
-              <>
-                <SidebarLink
-                  href={`/tasks?project=${currentProjectId}`}
-                  icon={ListChecks}
-                  active={pathname === "/tasks"}
-                >
-                  Backlog
-                </SidebarLink>
-                <SidebarLink
-                  href={`/tasks/board?project=${currentProjectId}`}
-                  icon={Kanban}
-                  active={pathname.startsWith("/tasks/board")}
-                >
-                  Active Sprint
-                </SidebarLink>
-                <SidebarLink
-                  href={`/sprints?project=${currentProjectId}`}
-                  icon={CalendarRange}
-                  active={pathname.startsWith("/sprints")}
-                >
-                  Sprints
-                </SidebarLink>
-                <SidebarLink
-                  href={`/tasks/members?project=${currentProjectId}`}
-                  icon={Users}
-                  active={pathname.startsWith("/tasks/members")}
-                >
-                  Members
-                </SidebarLink>
-              </>
-            ) : null}
-
-            <ProjectFormDialog
-              mode="create"
-              open={createProjectOpen}
-              onOpenChange={setCreateProjectOpen}
-              onSaved={(project) => {
-                router.push(`/tasks?project=${project.id}`);
-                router.refresh();
-              }}
-            />
-
-            {currentProject ? (
-              <ProjectFormDialog
-                mode="edit"
-                project={currentProject}
-                blockers={editBlockers}
-                open={editProjectOpen}
-                onOpenChange={setEditProjectOpen}
-                onSaved={() => router.refresh()}
-                onDeleted={() => {
-                  router.push("/tasks");
-                  router.refresh();
-                }}
-              />
-            ) : null}
+            {TASK_TABS.map((tab) => (
+              <SidebarLink
+                key={tab.tab}
+                href={tab.href}
+                icon={tab.icon}
+                active={pathname === "/tasks" && tasksTab === tab.tab}
+              >
+                {tab.label}
+              </SidebarLink>
+            ))}
           </>
         )}
       </nav>
 
-      {/* Bottom-anchored: workspace switcher stacked directly above profile. */}
       <div className="mt-4 flex shrink-0 flex-col gap-3 border-t border-glass-border pt-4">
         {canSwitchWorkspace ? (
           <SwitcherRow
